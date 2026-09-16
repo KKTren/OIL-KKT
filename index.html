@@ -929,6 +929,84 @@ select.input { appearance: none; padding-right: 34px;
     });
   }
 
+  /* ---------------- страховка от рассинхрона схемы ----------------
+     Если в базе Supabase ещё нет какой-то из новых колонок (не прогнали
+     свежий schema.sql либо PostgREST держит старый кеш схемы), запись
+     падала бы с «Could not find the 'X' column». Вместо падения выкидываем
+     эту колонку и пробуем снова: данные сохранятся, просто без нового поля.
+     Об этом один раз говорим в консоль. */
+
+  const missingCols = {};
+
+  function noteMissing(table, col) {
+    const key = table + '.' + col;
+    if (missingCols[key]) return;
+    missingCols[key] = true;
+    console.warn('Lube Control: в базе нет колонки ' + key +
+      '. Выполните свежий schema.sql в Supabase → SQL Editor, затем: notify pgrst, \'reload schema\';');
+  }
+
+  const missingColName = (error) => {
+    const m = /Could not find the '([^']+)' column/.exec((error && error.message) || '');
+    return m ? m[1] : null;
+  };
+
+  const missingTable = (error) =>
+    !!error && (error.code === 'PGRST205' || error.code === '42P01' ||
+      /Could not find the table|relation .* does not exist/i.test(error.message || ''));
+
+  /** insert с отбрасыванием колонок, которых нет в базе. */
+  async function sbInsert(table, row, wantRow) {
+    const data = Object.assign({}, row);
+    for (let i = 0; i < 12; i++) {
+      const q = sb.from(table).insert(data);
+      const res = wantRow ? await q.select().single() : await q;
+      if (!res.error) return res.data || data;
+      const col = missingColName(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
+        noteMissing(table, col);
+        delete data[col];
+        continue;
+      }
+      if (missingTable(res.error)) {
+        noteMissing(table, '*');
+        throw new Error('В базе нет таблицы «' + table +
+          '». Выполните свежий schema.sql в Supabase → SQL Editor.');
+      }
+      throw res.error;
+    }
+    throw new Error('Не удалось записать в ' + table);
+  }
+
+  /** Чтение таблицы, которой может не быть в старой базе: тогда просто пусто. */
+  async function sbSelect(table, build) {
+    const res = await build(sb.from(table).select('*'));
+    if (!res.error) return res.data || [];
+    if (missingTable(res.error)) {
+      noteMissing(table, '*');
+      return [];
+    }
+    throw res.error;
+  }
+
+  /** update с той же страховкой. build(query) навешивает .eq(...) и прочее. */
+  async function sbUpdate(table, patch, build) {
+    const data = Object.assign({}, patch);
+    for (let i = 0; i < 12; i++) {
+      const res = await build(sb.from(table).update(data));
+      if (!res.error) return data;
+      const col = missingColName(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
+        noteMissing(table, col);
+        delete data[col];
+        if (!Object.keys(data).length) return data;
+        continue;
+      }
+      throw res.error;
+    }
+    throw new Error('Не удалось обновить ' + table);
+  }
+
   const listeners = [];
   const uid = () =>
     (crypto.randomUUID ? crypto.randomUUID()
@@ -1017,9 +1095,7 @@ select.input { appearance: none; padding-right: 34px;
       return readLocal().catalog.slice()
         .sort((a, b) => (a.name + a.brand).localeCompare(b.name + b.brand));
     }
-    const { data, error } = await sb.from('catalog').select('*').order('name');
-    if (error) throw error;
-    return data || [];
+    return await sbSelect('catalog', q => q.order('name'));
   }
 
   async function addCatalogItem(data, user) {
@@ -1052,8 +1128,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('catalog').insert(row);
-    if (error) throw error;
+    await sbInsert('catalog', row);
     await logOp({ type: 'price_add', item_name: row.name, brand: row.brand, sku: row.sku,
       note: [row.brand, row.volume].filter(Boolean).join(' · '),
       user_login: user.login, user_name: user.name });
@@ -1083,13 +1158,11 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return c;
     }
-    const { error } = await sb.from('catalog').update(patch).eq('id', id);
-    if (error) throw error;
-    const { error: e2 } = await sb.from('items').update({
+    await sbUpdate('catalog', patch, q => q.eq('id', id));
+    await sbUpdate('items', {
       name: patch.name, brand: patch.brand, volume: patch.volume, sku: patch.sku,
       category: patch.category, price: patch.price, cost: patch.cost
-    }).eq('catalog_id', id);
-    if (e2) throw e2;
+    }, q => q.eq('catalog_id', id));
     await logOp({ type: 'price_edit', item_name: patch.name, brand: patch.brand, sku: patch.sku,
       note: 'закупка ' + patch.cost + ' / продажа ' + patch.price,
       user_login: user.login, user_name: user.name });
@@ -1109,8 +1182,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return c;
     }
-    const { error } = await sb.from('catalog').update({ archived: !!archived }).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('catalog', { archived: !!archived }, q => q.eq('id', id));
     await logOp({ type: archived ? 'price_archive' : 'price_restore', item_name: '',
       user_login: user.login, user_name: user.name, note: id });
   }
@@ -1147,10 +1219,8 @@ select.input { appearance: none; padding-right: 34px;
         .sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
           String(b.created_at).localeCompare(String(a.created_at)));
     }
-    const { data, error } = await sb.from('purchases').select('*')
-      .order('date', { ascending: false }).order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    return await sbSelect('purchases',
+      q => q.order('date', { ascending: false }).order('created_at', { ascending: false }));
   }
 
   function purchaseRow(data, cat, user) {
@@ -1193,8 +1263,7 @@ select.input { appearance: none; padding-right: 34px;
       st.purchases.unshift(row);
       writeLocal(st);
     } else {
-      const { error } = await sb.from('purchases').insert(row);
-      if (error) throw error;
+      await sbInsert('purchases', row);
     }
 
     await logOp({
@@ -1234,8 +1303,7 @@ select.input { appearance: none; padding-right: 34px;
     const { data: rows, error: e0 } = await sb.from('purchases').select('*').eq('id', id).single();
     if (e0) throw e0;
     const row = purchaseRow(Object.assign({}, data, { id: id, created_at: rows.created_at }), cat, user);
-    const { error } = await sb.from('purchases').update(row).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('purchases', row, q => q.eq('id', id));
     return row;
   }
 
@@ -1355,9 +1423,7 @@ select.input { appearance: none; padding-right: 34px;
       writeLocal(st);
       return row;
     }
-    const { data, error } = await sb.from('ops').insert(row).select().single();
-    if (error) throw error;
-    return data;
+    return await sbInsert('ops', row, true);
   }
 
   /** Меняет остаток позиции на delta и пишет операцию в журнал. */
@@ -1381,8 +1447,7 @@ select.input { appearance: none; padding-right: 34px;
     const next = Math.max(0, Math.min(item.max, item.qty + delta));
     if (next === item.qty) throw new Error(delta < 0 ? 'Позиция уже пустая' : 'Больше не влезет — стеллаж полный');
     const applied = next - item.qty;
-    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
-    if (e2) throw e2;
+    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
     await logOp(opRow(item, applied, op, next));
     return { item: { ...item, qty: next }, applied };
   }
@@ -1429,8 +1494,7 @@ select.input { appearance: none; padding-right: 34px;
     if (e1) throw e1;
     const next = Math.max(0, Math.min(item.max, Math.round(value)));
     const diff = next - item.qty;
-    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
-    if (e2) throw e2;
+    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
     if (diff !== 0) {
       await logOp({
         ...op, item_id: item.id, item_name: item.name, brand: item.brand, sku: item.sku,
@@ -1482,9 +1546,8 @@ select.input { appearance: none; padding-right: 34px;
       writeLocal(st);
       return;
     }
-    const { error } = await sb.from('requests').update({ status: 'done' })
-      .eq('rack_code', rackCode).neq('status', 'done');
-    if (error) throw error;
+    await sbUpdate('requests', { status: 'done' },
+      q => q.eq('rack_code', rackCode).neq('status', 'done'));
   }
 
   async function createRequest(rackCode, note, user) {
@@ -1502,8 +1565,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('requests').insert(row);
-    if (error) throw error;
+    await sbInsert('requests', row);
     await logOp({ rack_code: rackCode, type: 'request', note: note, user_login: user.login, user_name: user.name });
     return row;
   }
@@ -1525,9 +1587,7 @@ select.input { appearance: none; padding-right: 34px;
       if (n) { writeLocal(st); localChanged(); }
       return n;
     }
-    const { error } = await sb.from('requests').update({ seen_at: now })
-      .in('id', list).is('seen_at', null);
-    if (error) throw error;
+    await sbUpdate('requests', { seen_at: now }, q => q.in('id', list).is('seen_at', null));
     return list.length;
   }
 
@@ -1570,14 +1630,12 @@ select.input { appearance: none; padding-right: 34px;
         created_by: user.login, created_by_name: user.name,
         seen_at: now, packed_at: null, packed_by: '', created_at: now
       };
-      const { error } = await sb.from('requests').insert(req);
-      if (error) throw error;
+      await sbInsert('requests', req);
     }
     if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
-    const { error: e1 } = await sb.from('requests').update({
+    await sbUpdate('requests', {
       status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name
-    }).eq('id', req.id);
-    if (e1) throw e1;
+    }, q => q.eq('id', req.id));
     await logOp({ rack_code: rackCode, type: 'packed', note: note || 'поставка собрана',
       user_login: user.login, user_name: user.name });
     return req;
@@ -1592,8 +1650,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return;
     }
-    const { error } = await sb.from('requests').update({ status: 'done' }).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('requests', { status: 'done' }, q => q.eq('id', id));
   }
 
   async function addRack(data, user) {
@@ -1611,8 +1668,8 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('racks').insert(row);
-    if (error) throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error);
+    try { await sbInsert('racks', row); }
+    catch (error) { throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error); }
     await logOp({ rack_code: row.code, type: 'rack_add', user_login: user.login, user_name: user.name, note: row.station });
     return row;
   }
@@ -1643,8 +1700,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return r;
     }
-    const { error } = await sb.from('racks').update(patch).eq('code', code);
-    if (error) throw error;
+    await sbUpdate('racks', patch, q => q.eq('code', code));
     await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name,
       note: patch.station || (data.photo !== undefined ? 'фото обновлено' : 'правка карточки') });
     return patch;
@@ -1681,8 +1737,7 @@ select.input { appearance: none; padding-right: 34px;
       .eq('rack_code', rackCode).eq('catalog_id', cat.id);
     if (e0) throw e0;
     if (exist && exist.length) throw new Error('Эта позиция уже стоит на стеллаже');
-    const { error } = await sb.from('items').insert(row);
-    if (error) throw error;
+    await sbInsert('items', row);
     await logOp({ rack_code: rackCode, item_id: row.id, catalog_id: cat.id, item_name: row.name, brand: row.brand,
       sku: row.sku, type: 'item_add', qty: row.qty, qty_after: row.qty,
       cost: row.cost, price: row.price, amount: row.qty * row.cost,
@@ -1731,8 +1786,7 @@ select.input { appearance: none; padding-right: 34px;
     const { data: it, error: e1 } = await sb.from('items').select('*').eq('id', itemId).single();
     if (e1) throw e1;
     const qty = Math.min(it.qty, value);
-    const { error } = await sb.from('items').update({ max: value, qty }).eq('id', itemId);
-    if (error) throw error;
+    await sbUpdate('items', { max: value, qty }, q => q.eq('id', itemId));
     await logOp({ rack_code: it.rack_code, item_id: it.id, item_name: it.name, brand: it.brand,
       type: 'item_max', qty_after: qty, user_login: user.login, user_name: user.name,
       note: 'вместимость ' + value });
@@ -1761,8 +1815,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return;
     }
-    const { error } = await sb.from('ops').update({ cancelled: true }).eq('id', opId);
-    if (error) throw error;
+    await sbUpdate('ops', { cancelled: true }, q => q.eq('id', opId));
   }
 
   /* ---------------- подписка на изменения ---------------- */
