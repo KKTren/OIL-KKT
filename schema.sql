@@ -2,7 +2,8 @@
 --  Lube Control — схема базы для Supabase
 --  Выполнить один раз: Supabase → SQL Editor → New query → Run
 --  Файл можно прогонять повторно: он не ломает уже созданное.
---  Версия от 16.09.2026 — добавлен ПРАЙС (catalog) и подробные движения.
+--  Версия от 16.09.2026 — прайс, закупки (склад), фото стеллажей,
+--  статусы поставки и подробные движения. Стартовых данных нет.
 -- ============================================================
 
 -- ---------- 1. Таблицы ----------
@@ -73,11 +74,37 @@ alter table public.ops add column if not exists price     numeric default 0;
 alter table public.ops add column if not exists cost      numeric default 0;
 alter table public.ops add column if not exists margin    numeric default 0;
 alter table public.ops add column if not exists qty_after integer;
+-- ссылка на прайс: по ней считается остаток склада (закуплено − отгружено)
+alter table public.ops add column if not exists catalog_id text;
 -- rack_code у операций с прайсом пустой — снимаем ограничение not null
 alter table public.ops alter column rack_code drop not null;
 alter table public.ops alter column rack_code set default '';
 create index if not exists ops_rack_idx on public.ops(rack_code, created_at desc);
 create index if not exists ops_date_idx on public.ops(created_at desc);
+
+-- ЗАКУПКИ: что привезли на склад. Со склада товар уезжает на стеллажи.
+create table if not exists public.purchases (
+  id          text primary key,
+  date        date not null default current_date,   -- дата поставки
+  catalog_id  text references public.catalog(id),
+  name        text not null,
+  brand       text default '',
+  volume      text default '',
+  sku         text default '',
+  category    text default 'other',
+  supplier    text default '',                      -- поставщик
+  cost        numeric default 0,                    -- цена входящая (закуп)
+  qty         integer not null default 0,
+  amount      numeric default 0,                    -- cost * qty
+  payment     text default '',                      -- способ оплаты
+  note        text default '',
+  user_login  text default '',
+  user_name   text default '',
+  created_at  timestamptz not null default now()
+);
+create index if not exists purchases_date_idx on public.purchases(date desc);
+create index if not exists purchases_catalog_idx on public.purchases(catalog_id);
+create index if not exists purchases_supplier_idx on public.purchases(supplier);
 
 create table if not exists public.requests (
   id              text primary key,
@@ -169,7 +196,8 @@ $$;
 
 -- ---------- 4. Row Level Security ----------
 
-alter table public.catalog  enable row level security;
+alter table public.catalog   enable row level security;
+alter table public.purchases enable row level security;
 alter table public.racks    enable row level security;
 alter table public.items    enable row level security;
 alter table public.ops      enable row level security;
@@ -188,6 +216,11 @@ create policy catalog_read on public.catalog
 
 drop policy if exists catalog_write on public.catalog;
 create policy catalog_write on public.catalog
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- ЗАКУПКИ: только администратор — и читает, и пишет
+drop policy if exists purchases_all on public.purchases;
+create policy purchases_all on public.purchases
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- стеллажи: читают все вошедшие, меняет только админ
@@ -255,55 +288,16 @@ create policy requests_update on public.requests
 
 do $$
 begin
-  begin alter publication supabase_realtime add table public.catalog;  exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.catalog;   exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.purchases; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.items;    exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.ops;      exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.requests; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.racks;    exception when duplicate_object then null; end;
 end $$;
 
--- ---------- 6. Стартовый прайс ----------
-
-insert into public.catalog (id, category, name, brand, volume, sku, cost, price) values
-  ('p1',  'motor',   'Синтетика 5W-30',         'Mobil',      '4 л', 'M2134',    520, 740),
-  ('p2',  'motor',   'Синтетика 5W-40',         'Mobil',      '4 л', 'M2128',    560, 790),
-  ('p3',  'motor',   'Минеральное 10W-40',      'Лукойл',     '4 л', 'LK-1040',  380, 560),
-  ('p4',  'motor',   'Полусинтетика 10W-40',    'Shell',      '4 л', 'SH-1040',  430, 640),
-  ('p5',  'motor',   'Синтетика 0W-20',         'Toyota',     '4 л', 'TY-0W20',  620, 880),
-  ('p6',  'motor',   'Синтетика 5W-30 (1 л)',   'Mobil',      '1 л', 'M2127',    160, 240),
-  ('p7',  'gear',    'Трансмиссионное 75W-90',  'Castrol',    '1 л', 'CS-7590',  340, 520),
-  ('p8',  'gear',    'ATF SP-3',                'Mando',      '1 л', 'MZ320015', 600, 900),
-  ('p9',  'coolant', 'Антифриз G12',            'HEPU',       '5 л', 'P999-G12', 320, 490),
-  ('p10', 'coolant', 'Антифриз G11',            'Felix',      '5 л', 'FX-G11',   280, 430),
-  ('p11', 'brake',   'Тормозная жидкость DOT4', 'Bosch',      '1 л', 'BS-DOT4',  240, 380),
-  ('p12', 'washer',  'Омыватель −20°',          'Liqui Moly', '4 л', 'LM-20',    190, 320)
-on conflict (id) do nothing;
-
--- ---------- 7. Стартовые стеллажи ----------
-
-insert into public.racks (code, station, address, post, operator) values
-  ('СТ-101', 'АвтоЭкспресс',  'ул. Ленина 12',    'пост 2А', 'Алексей П.'),
-  ('СТ-102', 'МастерСервис',  'ул. Мира 45',      'пост 1',  'Сергей В.'),
-  ('СТ-103', 'ШинМастер',     'пр. Победы 8',     'пост 3',  'Ирина Л.'),
-  ('СТ-104', 'ГрандАвто',     'ш. Северное 3',    'пост 2',  'Дмитрий Н.')
-on conflict (code) do nothing;
-
-insert into public.items (id, rack_code, catalog_id, name, brand, volume, sku, category, cost, price, qty, max, sort)
-select i.id, i.rack_code, c.id, c.name, c.brand, c.volume, c.sku, c.category, c.cost, c.price, i.qty, i.max, i.sort
-from (values
-  ('i-101-1', 'СТ-101', 'p1',  12, 20, 1),
-  ('i-101-2', 'СТ-101', 'p2',   3, 15, 2),
-  ('i-101-3', 'СТ-101', 'p3',  10, 10, 3),
-  ('i-101-4', 'СТ-101', 'p9',   9, 10, 4),
-  ('i-102-1', 'СТ-102', 'p1',   0, 15, 1),
-  ('i-102-2', 'СТ-102', 'p4',   5, 20, 2),
-  ('i-102-3', 'СТ-102', 'p7',   8, 12, 3),
-  ('i-103-1', 'СТ-103', 'p5',   4, 12, 1),
-  ('i-103-2', 'СТ-103', 'p9',   9, 10, 2),
-  ('i-103-3', 'СТ-103', 'p1',   7, 15, 3),
-  ('i-104-1', 'СТ-104', 'p2',  11, 15, 1),
-  ('i-104-2', 'СТ-104', 'p4',   2, 20, 2),
-  ('i-104-3', 'СТ-104', 'p11',  6,  8, 3)
-) as i(id, rack_code, catalog_id, qty, max, sort)
-join public.catalog c on c.id = i.catalog_id
-on conflict (id) do nothing;
+-- ---------- 6. Стартовых данных нет ----------
+-- Прайс, стеллажи и закупки заводятся руками из панели администратора:
+--   Прайс → «Позиция в прайс»
+--   Закупки → «Новая закупка»
+--   Стеллажи → «Добавить стеллаж» → «+ Позиция»

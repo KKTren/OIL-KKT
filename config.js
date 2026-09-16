@@ -17,8 +17,8 @@ window.LC_CONFIG = {
        Project Settings → Data API   → Project URL
        Project Settings → API Keys   → anon / public          */
 
-  supabaseUrl: 'https://wbvyqpooqygivmsutyya.supabase.co',
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndidnlxcG9vcXlnaXZtc3V0eXlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1Nzc4NzksImV4cCI6MjEwNTE1Mzg3OX0.fY0xFjVjSXrw-2t3ipZbwA7UAo1QC2gUn8t__FfBO84',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
   emailDomain: 'lubecontrol.app',
 
   /* ---------- Правила ---------- */
@@ -72,6 +72,16 @@ window.LC_CONFIG = {
     { key: 'brake',   label: 'Тормозная жидкость', color: '#FF5A5F' },
     { key: 'washer',  label: 'Омыватель',          color: '#4FC3F7' },
     { key: 'other',   label: 'Прочее',             color: '#8494AC' }
+  ],
+
+  /* ---------- Способы оплаты закупок ----------
+     Появляются списком в окне «Новая закупка». */
+
+  payments: [
+    'Наличные',
+    'Перевод на карту',
+    'Безнал по счёту',
+    'Отсрочка платежа'
   ],
 
   /* ---------- Аккаунты ----------

@@ -212,6 +212,7 @@ button:disabled { cursor: not-allowed; }
 .kpi .row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 
 .kpi-grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kpi-grid.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .kpi.compact { padding: 14px 16px; gap: 7px; }
 .kpi.compact .value { font-size: 21px; }
 
@@ -639,9 +640,13 @@ select.input { appearance: none; padding-right: 34px;
 }
 .log-row + .log-row { border-top: 1px solid var(--line-soft); }
 
+@media (max-width: 1440px) {
+  .kpi-grid.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (max-width: 1180px) {
   .split { grid-template-columns: minmax(0, 1fr); }
-  .kpi-grid, .kpi-grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-grid, .kpi-grid.five, .kpi-grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -671,7 +676,7 @@ select.input { appearance: none; padding-right: 34px;
 
 @media (max-width: 560px) {
   .topbar .brand span { display: none; }
-  .kpi-grid, .kpi-grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi-grid, .kpi-grid.five, .kpi-grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kpi .value { font-size: 24px; }
   .card { padding: 15px 16px; }
   .goods-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -826,7 +831,16 @@ select.input { appearance: none; padding-right: 34px;
       { key: 'other',   label: 'Прочее',              color: '#8494AC' }
     ],
 
-    /* ---------- 7. Аккаунты ----------
+    /* ---------- 7. Способы оплаты закупок ---------- */
+
+    payments: [
+      'Наличные',
+      'Перевод на карту',
+      'Безнал по счёту',
+      'Отсрочка платежа'
+    ],
+
+    /* ---------- 8. Аккаунты ----------
        Пароли нужны только для ДЕМО-режима. С Supabase пароль проверяет сервер. */
 
     accounts: [
@@ -837,64 +851,11 @@ select.input { appearance: none; padding-right: 34px;
       { login: 'seller4', password: 'Rack104-Oil',    role: 'seller', name: 'Дмитрий Н.',  title: 'Продавец',       rack: 'СТ-104' }
     ],
 
-    /* ---------- 8. Стартовый прайс ДЕМО-режима ---------- */
+    /* ---------- 9. Стартовые данные ----------
+       Пусто: прайс, стеллажи и закупки заводятся руками из панели админа. */
 
-    demoCatalog: [
-      { id: 'p1', category: 'motor',   name: 'Синтетика 5W-30',        brand: 'Mobil',   volume: '4 л', sku: 'M2134',    cost: 520, price: 740 },
-      { id: 'p2', category: 'motor',   name: 'Синтетика 5W-40',        brand: 'Mobil',   volume: '4 л', sku: 'M2128',    cost: 560, price: 790 },
-      { id: 'p3', category: 'motor',   name: 'Минеральное 10W-40',     brand: 'Лукойл',  volume: '4 л', sku: 'LK-1040',  cost: 380, price: 560 },
-      { id: 'p4', category: 'motor',   name: 'Полусинтетика 10W-40',   brand: 'Shell',   volume: '4 л', sku: 'SH-1040',  cost: 430, price: 640 },
-      { id: 'p5', category: 'motor',   name: 'Синтетика 0W-20',        brand: 'Toyota',  volume: '4 л', sku: 'TY-0W20',  cost: 620, price: 880 },
-      { id: 'p6', category: 'motor',   name: 'Синтетика 5W-30 (1 л)',  brand: 'Mobil',   volume: '1 л', sku: 'M2127',    cost: 160, price: 240 },
-      { id: 'p7', category: 'gear',    name: 'Трансмиссионное 75W-90', brand: 'Castrol', volume: '1 л', sku: 'CS-7590',  cost: 340, price: 520 },
-      { id: 'p8', category: 'gear',    name: 'ATF SP-3',               brand: 'Mando',   volume: '1 л', sku: 'MZ320015', cost: 600, price: 900 },
-      { id: 'p9', category: 'coolant', name: 'Антифриз G12',           brand: 'HEPU',    volume: '5 л', sku: 'P999-G12', cost: 320, price: 490 },
-      { id: 'p10', category: 'coolant', name: 'Антифриз G11',          brand: 'Felix',   volume: '5 л', sku: 'FX-G11',   cost: 280, price: 430 },
-      { id: 'p11', category: 'brake',  name: 'Тормозная жидкость DOT4', brand: 'Bosch',  volume: '1 л', sku: 'BS-DOT4',  cost: 240, price: 380 },
-      { id: 'p12', category: 'washer', name: 'Омыватель −20°',         brand: 'Liqui Moly', volume: '4 л', sku: 'LM-20', cost: 190, price: 320 }
-    ],
-
-    /* ---------- 9. Стартовые стеллажи ДЕМО-режима ---------- */
-
-    demoRacks: [
-      {
-        code: 'СТ-101', station: 'АвтоЭкспресс', address: 'ул. Ленина 12',
-        post: 'пост 2А', operator: 'Алексей П.',
-        items: [
-          { catalog_id: 'p1', qty: 12, max: 20 },
-          { catalog_id: 'p2', qty: 3,  max: 15 },
-          { catalog_id: 'p3', qty: 10, max: 10 },
-          { catalog_id: 'p9', qty: 9,  max: 10 }
-        ]
-      },
-      {
-        code: 'СТ-102', station: 'МастерСервис', address: 'ул. Мира 45',
-        post: 'пост 1', operator: 'Сергей В.',
-        items: [
-          { catalog_id: 'p1', qty: 0, max: 15 },
-          { catalog_id: 'p4', qty: 5, max: 20 },
-          { catalog_id: 'p7', qty: 8, max: 12 }
-        ]
-      },
-      {
-        code: 'СТ-103', station: 'ШинМастер', address: 'пр. Победы 8',
-        post: 'пост 3', operator: 'Ирина Л.',
-        items: [
-          { catalog_id: 'p5', qty: 4, max: 12 },
-          { catalog_id: 'p9', qty: 9, max: 10 },
-          { catalog_id: 'p1', qty: 7, max: 15 }
-        ]
-      },
-      {
-        code: 'СТ-104', station: 'ГрандАвто', address: 'ш. Северное 3',
-        post: 'пост 2', operator: 'Дмитрий Н.',
-        items: [
-          { catalog_id: 'p2',  qty: 11, max: 15 },
-          { catalog_id: 'p4',  qty: 2,  max: 20 },
-          { catalog_id: 'p11', qty: 6,  max: 8 }
-        ]
-      }
-    ]
+    demoCatalog: [],
+    demoRacks: []
   };
 
   /* ---------------- склейка трёх слоёв ---------------- */
@@ -958,7 +919,7 @@ select.input { appearance: none; padding-right: 34px;
 
 (function () {
   const CFG = window.LC_CONFIG;
-  const LS_KEY = 'lc_state_v2';
+  const LS_KEY = 'lc_state_v3';
 
   const cloud = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
   let sb = null;
@@ -990,22 +951,22 @@ select.input { appearance: none; padding-right: 34px;
   }
 
   function seed() {
-    const catalog = CFG.demoCatalog.map((c, i) => Object.assign({}, c, {
+    const catalog = (CFG.demoCatalog || []).map((c, i) => Object.assign({}, c, {
       archived: false,
-      created_at: new Date(Date.now() - (CFG.demoCatalog.length - i) * 864e5).toISOString()
+      created_at: new Date(Date.now() - i * 864e5).toISOString()
     }));
     const byId = {};
     catalog.forEach(c => { byId[c.id] = c; });
 
     const racks = [];
     const items = [];
-    CFG.demoRacks.forEach((r) => {
+    (CFG.demoRacks || []).forEach((r) => {
       racks.push({
         code: r.code, station: r.station, address: r.address,
         post: r.post, operator: r.operator, photo: r.photo || '',
         created_at: new Date().toISOString()
       });
-      r.items.forEach((it, i) => {
+      (r.items || []).forEach((it, i) => {
         const cat = byId[it.catalog_id];
         if (!cat) return;
         items.push(Object.assign({ id: uid(), rack_code: r.code, qty: it.qty, max: it.max, sort: i },
@@ -1013,32 +974,7 @@ select.input { appearance: none; padding-right: 34px;
       });
     });
 
-    return { catalog, racks, items, ops: seedOps(items), requests: [] };
-  }
-
-  /** Немного истории продаж, чтобы «Движения товара» не были пустыми в демо. */
-  function seedOps(items) {
-    const ops = [];
-    const now = new Date();
-    for (let d = 13; d >= 0; d--) {
-      const perDay = 2 + Math.floor(Math.random() * 5);
-      for (let k = 0; k < perDay; k++) {
-        const it = items[Math.floor(Math.random() * items.length)];
-        if (!it) continue;
-        const day = new Date(now);
-        day.setDate(day.getDate() - d);
-        day.setHours(9 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 59), 0, 0);
-        const when = day > now ? new Date(now.getTime() - Math.random() * 36e5) : day;
-        ops.push({
-          id: uid(), rack_code: it.rack_code, item_id: it.id, item_name: it.name,
-          brand: it.brand, sku: it.sku, type: 'sale', qty: 1,
-          price: it.price, cost: it.cost, amount: it.price, margin: it.price - it.cost,
-          qty_after: it.qty, user_login: 'seller', user_name: 'Продавец', note: '',
-          cancelled: false, created_at: when.toISOString()
-        });
-      }
-    }
-    return ops.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return { catalog, racks, items, ops: [], requests: [], purchases: [] };
   }
 
   function readLocal() {
@@ -1047,6 +983,7 @@ select.input { appearance: none; padding-right: 34px;
       if (raw) {
         const st = JSON.parse(raw);
         if (!st.catalog) st.catalog = [];
+        if (!st.purchases) st.purchases = [];
         return st;
       }
     } catch (e) { /* пустое или битое хранилище */ }
@@ -1200,6 +1137,128 @@ select.input { appearance: none; padding-right: 34px;
     await logOp({ type: 'price_delete', item_name: '', note: id, user_login: user.login, user_name: user.name });
   }
 
+  /* ---------------- закупки ----------------
+     Закупка — приход товара на склад: что привезли, от кого, почём и как оплатили.
+     Со склада товар потом уезжает на стеллажи. */
+
+  async function getPurchases() {
+    if (!cloud) {
+      return readLocal().purchases.slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
+          String(b.created_at).localeCompare(String(a.created_at)));
+    }
+    const { data, error } = await sb.from('purchases').select('*')
+      .order('date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  function purchaseRow(data, cat, user) {
+    const qty = Math.round(Number(data.qty) || 0);
+    const cost = Number(data.cost) || 0;
+    if (qty <= 0) throw new Error('Количество должно быть больше нуля');
+    return {
+      id: data.id || uid(),
+      date: data.date || new Date().toISOString().slice(0, 10),
+      catalog_id: cat.id,
+      name: cat.name,
+      brand: cat.brand || '',
+      volume: cat.volume || '',
+      sku: cat.sku || '',
+      category: cat.category || 'other',
+      supplier: String(data.supplier || '').trim(),
+      cost: cost,
+      qty: qty,
+      amount: cost * qty,
+      payment: String(data.payment || '').trim(),
+      note: String(data.note || '').trim(),
+      user_login: user.login,
+      user_name: user.name,
+      created_at: data.created_at || new Date().toISOString()
+    };
+  }
+
+  /**
+   * Новая закупка. Если updateCost — свежая цена уезжает в прайс
+   * и на все стеллажи, где эта позиция стоит.
+   */
+  async function addPurchase(data, user) {
+    const catalog = await getCatalog();
+    const cat = catalog.find(c => c.id === data.catalog_id);
+    if (!cat) throw new Error('Выберите товар из прайса');
+    const row = purchaseRow(data, cat, user);
+
+    if (!cloud) {
+      const st = readLocal();
+      st.purchases.unshift(row);
+      writeLocal(st);
+    } else {
+      const { error } = await sb.from('purchases').insert(row);
+      if (error) throw error;
+    }
+
+    await logOp({
+      type: 'purchase', rack_code: '', catalog_id: cat.id,
+      item_name: row.name, brand: row.brand, sku: row.sku,
+      qty: row.qty, cost: row.cost, price: Number(cat.price) || 0, amount: row.amount,
+      user_login: user.login, user_name: user.name,
+      note: [row.supplier, row.payment].filter(Boolean).join(' · ')
+    });
+
+    if (data.updateCost && row.cost && row.cost !== Number(cat.cost)) {
+      await updateCatalogItem(cat.id, {
+        category: cat.category, name: cat.name, brand: cat.brand, volume: cat.volume,
+        sku: cat.sku, cost: row.cost, price: cat.price
+      }, user);
+    }
+
+    if (!cloud) localChanged();
+    return row;
+  }
+
+  async function updatePurchase(id, data, user) {
+    const catalog = await getCatalog();
+    const cat = catalog.find(c => c.id === data.catalog_id);
+    if (!cat) throw new Error('Выберите товар из прайса');
+
+    if (!cloud) {
+      const st = readLocal();
+      const old = st.purchases.find(p => p.id === id);
+      if (!old) throw new Error('Закупка не найдена');
+      const row = purchaseRow(Object.assign({}, data, { id: id, created_at: old.created_at }), cat, user);
+      Object.assign(old, row);
+      writeLocal(st);
+      localChanged();
+      return old;
+    }
+    const { data: rows, error: e0 } = await sb.from('purchases').select('*').eq('id', id).single();
+    if (e0) throw e0;
+    const row = purchaseRow(Object.assign({}, data, { id: id, created_at: rows.created_at }), cat, user);
+    const { error } = await sb.from('purchases').update(row).eq('id', id);
+    if (error) throw error;
+    return row;
+  }
+
+  async function deletePurchase(id, user) {
+    if (!cloud) {
+      const st = readLocal();
+      const p = st.purchases.find(x => x.id === id);
+      st.purchases = st.purchases.filter(x => x.id !== id);
+      writeLocal(st);
+      if (p) await logOp({ type: 'purchase_del', rack_code: '', catalog_id: p.catalog_id,
+        item_name: p.name, brand: p.brand, qty: p.qty, cost: p.cost, amount: p.amount,
+        user_login: user.login, user_name: user.name, note: 'закупка удалена' });
+      localChanged();
+      return;
+    }
+    const { data: p } = await sb.from('purchases').select('*').eq('id', id).single();
+    const { error } = await sb.from('purchases').delete().eq('id', id);
+    if (error) throw error;
+    if (p) await logOp({ type: 'purchase_del', rack_code: '', catalog_id: p.catalog_id,
+      item_name: p.name, brand: p.brand, qty: p.qty, cost: p.cost, amount: p.amount,
+      user_login: user.login, user_name: user.name, note: 'закупка удалена' });
+  }
+
   /* ---------------- чтение ---------------- */
 
   async function getRacks() {
@@ -1272,6 +1331,7 @@ select.input { appearance: none; padding-right: 34px;
       id: uid(),
       rack_code: op.rack_code || '',
       item_id: op.item_id || null,
+      catalog_id: op.catalog_id || null,
       item_name: op.item_name || '',
       brand: op.brand || '',
       sku: op.sku || '',
@@ -1332,7 +1392,8 @@ select.input { appearance: none; padding-right: 34px;
     const sale = op.type === 'sale';
     return {
       ...op,
-      item_id: item.id, item_name: item.name, brand: item.brand, sku: item.sku,
+      item_id: item.id, catalog_id: item.catalog_id || null,
+      item_name: item.name, brand: item.brand, sku: item.sku,
       rack_code: item.rack_code,
       qty: n,
       price: item.price || 0,
@@ -1609,7 +1670,7 @@ select.input { appearance: none; padding-right: 34px;
         throw new Error('Эта позиция уже стоит на стеллаже');
       st.items.push(row);
       writeLocal(st);
-      await logOp({ rack_code: rackCode, item_id: row.id, item_name: row.name, brand: row.brand,
+      await logOp({ rack_code: rackCode, item_id: row.id, catalog_id: cat.id, item_name: row.name, brand: row.brand,
         sku: row.sku, type: 'item_add', qty: row.qty, qty_after: row.qty,
         cost: row.cost, price: row.price, amount: row.qty * row.cost,
         user_login: user.login, user_name: user.name, note: 'вместимость ' + row.max });
@@ -1622,7 +1683,7 @@ select.input { appearance: none; padding-right: 34px;
     if (exist && exist.length) throw new Error('Эта позиция уже стоит на стеллаже');
     const { error } = await sb.from('items').insert(row);
     if (error) throw error;
-    await logOp({ rack_code: rackCode, item_id: row.id, item_name: row.name, brand: row.brand,
+    await logOp({ rack_code: rackCode, item_id: row.id, catalog_id: cat.id, item_name: row.name, brand: row.brand,
       sku: row.sku, type: 'item_add', qty: row.qty, qty_after: row.qty,
       cost: row.cost, price: row.price, amount: row.qty * row.cost,
       user_login: user.login, user_name: user.name, note: 'вместимость ' + row.max });
@@ -1716,6 +1777,7 @@ select.input { appearance: none; padding-right: 34px;
         .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, bump)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'racks' }, bump)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog' }, bump)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'purchases' }, bump)
         .subscribe();
     }
     return () => {
@@ -1724,10 +1786,31 @@ select.input { appearance: none; padding-right: 34px;
     };
   }
 
-  function resetDemo() {
+  /** Стереть всё: прайс, стеллажи, закупки, движения. Только для демо-режима. */
+  function clearAll() {
     localStorage.removeItem(LS_KEY);
     readLocal();
     localChanged();
+  }
+
+  /**
+   * Остаток на складе по каждой позиции прайса:
+   * закупили − отгрузили на стеллажи (постановка позиции, пополнение, приём поставки).
+   * Возвращает { catalog_id: шт }.
+   */
+  function warehouse(purchases, ops) {
+    const left = {};
+    (purchases || []).forEach(p => {
+      if (!p.catalog_id) return;
+      left[p.catalog_id] = (left[p.catalog_id] || 0) + (Number(p.qty) || 0);
+    });
+    (ops || []).forEach(o => {
+      if (!o.catalog_id) return;
+      if (o.type === 'restock' || o.type === 'delivery' || o.type === 'item_add') {
+        left[o.catalog_id] = (left[o.catalog_id] || 0) - (Number(o.qty) || 0);
+      }
+    });
+    return left;
   }
 
   window.LC_STORE = {
@@ -1735,10 +1818,11 @@ select.input { appearance: none; padding-right: 34px;
     cloud, sb,
     getRacks, getRack, getOps, getRequests,
     getCatalog, addCatalogItem, updateCatalogItem, archiveCatalogItem, deleteCatalogItem,
+    getPurchases, addPurchase, updatePurchase, deletePurchase, warehouse,
     changeQty, setQty, restock, restockAll, logOp,
     createRequest, closeRequest, closeRequests, markRequestsSeen, markPacked,
     addRack, updateRack, addItem, removeItem, setMax, cancelOp,
-    onChange, resetDemo, uid
+    onChange, clearAll, resetDemo: clearAll, uid
   };
 })();
 
@@ -1778,6 +1862,8 @@ select.input { appearance: none; padding-right: 34px;
     camera: '<path d="M3 8h4l1.5-2h7L17 8h4v11H3z"/><circle cx="12" cy="13" r="3.4"/>',
     sliders: '<path d="M4 7h8"/><path d="M19 7h1"/><path d="M4 12h3"/><path d="M13 12h7"/><path d="M4 17h11"/><circle cx="15.5" cy="7" r="2"/><circle cx="9.5" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>',
     box: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Z"/><path d="M4 8.5 12 13l8-4.5"/><path d="M12 13v7"/>',
+    cart: '<path d="M3 5h2.2l2.3 9.5h9.2L19 8H6.5"/><circle cx="9.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/>',
+    wallet: '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><path d="M4 7.5V17a2 2 0 0 0 2 2h13V8H6.5A2.5 2.5 0 0 1 4 7.5Z"/><circle cx="15.5" cy="13.5" r="1.1"/>',
     scale: '<path d="M12 4v16"/><path d="M5 8h14"/><path d="m5 8-3 6h6Z"/><path d="m19 8-3 6h6Z"/>',
     can: '<path d="M6 10h13a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Z"/><path d="M10 10V6h7v4"/><path d="M19 13h4l2 4v6"/>'
   };
@@ -1842,6 +1928,8 @@ select.input { appearance: none; padding-right: 34px;
     delivery:      { label: 'Приём поставки',    sign: +1, color: '#3DDC84', group: 'move' },
     cancel:        { label: 'Возврат на полку',  sign: +1, color: '#7C8CF8', group: 'move' },
     audit:         { label: 'Сверка',            sign: 0,  color: '#8494AC', group: 'move' },
+    purchase:      { label: 'Закупка',           sign: +1, color: '#7C8CF8', group: 'buy' },
+    purchase_del:  { label: 'Закупка удалена',   sign: -1, color: '#FF5A5F', group: 'buy' },
     item_add:      { label: 'Позиция поставлена', sign: +1, color: '#3DDC84', group: 'setup' },
     item_remove:   { label: 'Позиция снята',     sign: -1, color: '#FF5A5F', group: 'setup' },
     item_max:      { label: 'Вместимость',       sign: 0,  color: '#8494AC', group: 'setup' },
@@ -2323,7 +2411,7 @@ window.LC_ADMIN = (function () {
 
   const ctx = {
     user: null,
-    racks: [], ops: [], requests: [], catalog: [],
+    racks: [], ops: [], requests: [], catalog: [], purchases: [],
     page: 'racks'
   };
 
@@ -2334,13 +2422,15 @@ window.LC_ADMIN = (function () {
 
   async function load() {
     const since = new Date(Date.now() - 180 * 864e5).toISOString();
-    const [racks, ops, requests, catalog] = await Promise.all([
+    const [racks, ops, requests, catalog, purchases] = await Promise.all([
       STORE.getRacks(),
-      STORE.getOps({ since, limit: 2000 }),
+      STORE.getOps({ since, limit: 4000 }),
       STORE.getRequests(true),
-      STORE.getCatalog()
+      STORE.getCatalog(),
+      STORE.getPurchases()
     ]);
-    ctx.racks = racks; ctx.ops = ops; ctx.requests = requests; ctx.catalog = catalog;
+    ctx.racks = racks; ctx.ops = ops; ctx.requests = requests;
+    ctx.catalog = catalog; ctx.purchases = purchases;
 
     // админ открыл панель — значит, заявки он увидел; продавцу это покажется сразу
     const fresh = requests.filter(r => !r.seen_at).map(r => r.id);
@@ -2407,14 +2497,17 @@ window.LC_ADMIN = (function () {
     window.scrollTo({ top: 0 });
   }
 
+  const navItems = () => [
+    { key: 'racks', label: 'Стеллажи', active: ctx.page === 'racks' },
+    { key: 'price', label: 'Прайс', active: ctx.page === 'price' },
+    { key: 'buys', label: 'Закупки', active: ctx.page === 'buys' },
+    { key: 'moves', label: 'Движения', active: ctx.page === 'moves' },
+    { key: 'settings', label: 'Настройки', active: ctx.page === 'settings' }
+  ];
+
   function renderTopbar() {
     UI.renderTopbar($('topbar'), ctx.user, {
-      nav: [
-        { key: 'racks', label: 'Стеллажи', active: ctx.page === 'racks' },
-        { key: 'price', label: 'Прайс', active: ctx.page === 'price' },
-        { key: 'moves', label: 'Движения', active: ctx.page === 'moves' },
-        { key: 'settings', label: 'Настройки', active: ctx.page === 'settings' }
-      ]
+      nav: navItems()
     });
     bindTopbar();
   }
@@ -2430,6 +2523,7 @@ window.LC_ADMIN = (function () {
 
   function renderPage() {
     if (ctx.page === 'price') { window.LC_PRICE.render($('view'), ctx); return; }
+    if (ctx.page === 'buys') { window.LC_BUYS.render($('view'), ctx); return; }
     if (ctx.page === 'moves') { window.LC_MOVES.render($('view'), ctx); return; }
     if (ctx.page === 'settings') { window.LC_SETTINGS.render($('view'), ctx); return; }
     renderRacksPage();
@@ -2438,12 +2532,7 @@ window.LC_ADMIN = (function () {
   /** Перерисовать текущий экран, не трогая настройки самой панели. */
   ctx.repaint = () => {
     UI.renderTopbar($('topbar'), ctx.user, {
-      nav: [
-        { key: 'racks', label: 'Стеллажи', active: ctx.page === 'racks' },
-        { key: 'price', label: 'Прайс', active: ctx.page === 'price' },
-        { key: 'moves', label: 'Движения', active: ctx.page === 'moves' },
-        { key: 'settings', label: 'Настройки', active: ctx.page === 'settings' }
-      ]
+      nav: navItems()
     });
     bindTopbar();
     if (ctx.page === 'racks') { $('view').innerHTML = ''; renderRacksPage(); }
@@ -2461,7 +2550,7 @@ window.LC_ADMIN = (function () {
           '<button class="btn btn-primary" id="btnAddRack"></button>' +
         '</div>' +
       '</div>' +
-      '<section class="kpi-grid" id="kpis"></section>' +
+      '<section class="kpi-grid five" id="kpis"></section>' +
       '<div class="split">' +
         '<div class="stack" id="leftCol">' +
           '<div class="section-head">' +
@@ -2504,13 +2593,24 @@ window.LC_ADMIN = (function () {
     const week = salesSince(7);
     const weekQty = week.reduce((s, o) => s + o.qty, 0);
 
+    const left = STORE.warehouse(ctx.purchases, ctx.ops);
+    const byId = {};
+    (ctx.catalog || []).forEach(c => { byId[c.id] = c; });
+    let whQty = 0, whSum = 0;
+    Object.keys(left).forEach(id => {
+      const n = left[id];
+      if (n > 0) { whQty += n; whSum += n * (Number((byId[id] || {}).cost) || 0); }
+    });
+
     $('kpis').innerHTML = [
       card('Стеллажей в норме', okRacks + '<small> / ' + ctx.racks.length + '</small>', '', spark()),
       card('Общий остаток', UI.num(total) + '<small> шт</small>',
         '<span style="font-size:12px;color:#64748B">продано за 7 дней: ' + UI.num(weekQty) + ' шт</span>'),
       card('Требуют пополнения', String(lowRacks + ctx.requests.length), '', UI.icon('warn', 22, '#FFA726', 1.6), 'warn', '#FFA726'),
       card('Пустые позиции', String(emptyItems),
-        '<span style="font-size:12px;color:#64748B">на ' + emptyRacks + ' СТО</span>', '', 'danger', '#FF5A5F')
+        '<span style="font-size:12px;color:#64748B">на ' + emptyRacks + ' СТО</span>', '', 'danger', '#FF5A5F'),
+      card('На складе', UI.num(whQty) + '<small> шт</small>',
+        '<span style="font-size:12px;color:#64748B">' + (whSum ? UI.money(whSum) : 'закупок нет') + '</span>')
     ].join('');
   }
 
@@ -2556,7 +2656,11 @@ window.LC_ADMIN = (function () {
   function renderRacks() {
     const list = visibleRacks();
     if (!list.length) {
-      $('racks').innerHTML = '<div class="empty-state">Ничего не найдено. Измените фильтр или поиск.</div>';
+      $('racks').innerHTML = ctx.racks.length
+        ? '<div class="empty-state">Ничего не найдено. Измените фильтр или поиск.</div>'
+        : '<div class="empty-state">Стеллажей пока нет.<br><br>' +
+          'Порядок такой: заведите товар в <b>Прайсе</b>, внесите поставку в <b>Закупках</b>, ' +
+          'потом добавьте стеллаж и поставьте на него позиции.</div>';
       return;
     }
     $('racks').innerHTML = list.map(rackCard).join('');
@@ -3228,7 +3332,6 @@ window.LC_PRICE = (function () {
   function stats(c) {
     const onRacks = [];
     ctx.racks.forEach(r => r.items.forEach(i => { if (i.catalog_id === c.id) onRacks.push({ r, i }); }));
-    const stock = onRacks.reduce((s, x) => s + x.i.qty, 0);
     const capacity = onRacks.reduce((s, x) => s + x.i.max, 0);
 
     const from = Date.now() - 30 * 864e5;
@@ -3240,10 +3343,16 @@ window.LC_PRICE = (function () {
     const revenue = sold.reduce((s, o) => s + Number(o.amount || 0), 0);
     const lastSale = sold.length ? sold[0].created_at : null;
 
+    const bought = (ctx.purchases || []).filter(p => p.catalog_id === c.id);
+    const boughtQty = bought.reduce((s, p) => s + (Number(p.qty) || 0), 0);
+    const lastBuy = bought.length ? bought[0] : null;
+    const stock = (ctx.stock || {})[c.id] || 0;
+
     const margin = (Number(c.price) || 0) - (Number(c.cost) || 0);
     const marginPct = c.price ? Math.round(margin / c.price * 100) : 0;
 
-    return { onRacks, stock, capacity, soldQty, revenue, lastSale, margin, marginPct,
+    return { onRacks, onRacksQty: onRacks.reduce((s, x) => s + x.i.qty, 0), capacity,
+      soldQty, revenue, lastSale, margin, marginPct, stock, boughtQty, lastBuy,
       points: new Set(onRacks.map(x => x.r.code)).size };
   }
 
@@ -3264,7 +3373,9 @@ window.LC_PRICE = (function () {
       cost: x => Number(x.c.cost) || 0,
       price: x => Number(x.c.price) || 0,
       margin: x => x.s.margin,
-      stock: x => x.s.stock,
+      stock: x => x.s.onRacksQty,
+      wh: x => x.s.stock,
+      bought: x => x.s.boughtQty,
       sold: x => x.s.soldQty,
       revenue: x => x.s.revenue,
       created: x => x.c.created_at || ''
@@ -3289,7 +3400,9 @@ window.LC_PRICE = (function () {
     { key: 'cost', label: 'Закупка ₽', cls: 'r' },
     { key: 'price', label: 'Продажа ₽', cls: 'r' },
     { key: 'margin', label: 'Маржа', cls: 'r' },
+    { key: 'wh', label: 'На складе', cls: 'r' },
     { key: 'stock', label: 'На стеллажах', cls: 'r' },
+    { key: 'bought', label: 'Закуплено', cls: 'r' },
     { key: 'sold', label: 'Продано 30д', cls: 'r' },
     { key: 'revenue', label: 'Выручка 30д', cls: 'r' },
     { key: 'created', label: 'В прайсе с', cls: 'r' },
@@ -3298,12 +3411,20 @@ window.LC_PRICE = (function () {
 
   function render(host, context) {
     ctx = context;
+    ctx.stock = STORE.warehouse(ctx.purchases, ctx.ops);   // склад считаем до таблицы
     const list = rows();
     const active = ctx.catalog.filter(c => !c.archived);
     const archivedCount = ctx.catalog.length - active.length;
 
     const stockSum = ctx.racks.reduce((s, r) =>
       s + r.items.reduce((t, i) => t + i.qty * (i.cost || 0), 0), 0);
+    const byId = {};
+    (ctx.catalog || []).forEach(c => { byId[c.id] = c; });
+    let whQty = 0, whSum = 0;
+    Object.keys(ctx.stock).forEach(id => {
+      const n = ctx.stock[id];
+      if (n > 0) { whQty += n; whSum += n * (Number((byId[id] || {}).cost) || 0); }
+    });
     const sold30 = ctx.ops.filter(o => o.type === 'sale' && !o.cancelled &&
       new Date(o.created_at).getTime() >= Date.now() - 30 * 864e5);
     const revenue30 = sold30.reduce((s, o) => s + Number(o.amount || 0), 0);
@@ -3322,10 +3443,11 @@ window.LC_PRICE = (function () {
           '</div>' +
         '</div>' +
 
-        '<section class="kpi-grid five">' +
+        '<section class="kpi-grid six">' +
           kpi('Позиций в прайсе', UI.num(active.length) + (archivedCount ? '<small> +' + archivedCount + ' в архиве</small>' : '')) +
           kpi('Средняя наценка', avgMargin + '<small> %</small>') +
-          kpi('Товара на стеллажах', UI.money(stockSum), '#F2B705') +
+          kpi('На складе', UI.num(whQty) + '<small> шт</small>', whQty ? 'var(--green)' : '#8494AC') +
+          kpi('Товара на стеллажах', UI.money(stockSum), 'var(--amber)') +
           kpi('Выручка за 30 дней', UI.money(revenue30), '#3DDC84') +
           kpi('Маржа за 30 дней', UI.money(margin30), '#3DDC84') +
         '</section>' +
@@ -3370,7 +3492,7 @@ window.LC_PRICE = (function () {
 
   function row(x) {
     const c = x.c, s = x.s;
-    const stockCls = s.stock === 0 && s.onRacks.length ? ' neg' : '';
+    const stockCls = s.onRacksQty === 0 && s.onRacks.length ? ' neg' : '';
     return '<tr' + (c.archived ? ' class="archived"' : '') + ' data-id="' + c.id + '">' +
       '<td><div class="prod"><b>' + UI.esc(c.name) + '</b>' +
         '<small>' + UI.esc(c.brand || '—') + '</small></div></td>' +
@@ -3382,9 +3504,15 @@ window.LC_PRICE = (function () {
       '<td class="r ' + (s.margin > 0 ? 'pos' : s.margin < 0 ? 'neg' : '') + '">' +
         (s.margin > 0 ? '+' : '') + UI.num(s.margin) +
         ' <span style="color:#4B5A75">' + s.marginPct + '%</span></td>' +
+      '<td class="r ' + (s.stock > 0 ? 'pos' : s.stock < 0 ? 'neg' : '') + '">' +
+        (s.stock ? s.stock + ' шт' : '<span style="color:#4B5A75">0</span>') + '</td>' +
       '<td class="r' + stockCls + '">' + (s.onRacks.length
-        ? s.stock + ' / ' + s.capacity + ' <span style="color:#4B5A75">· ' + s.points + ' СТО</span>'
+        ? s.onRacksQty + ' / ' + s.capacity + ' <span style="color:#4B5A75">· ' + s.points + ' СТО</span>'
         : '<span style="color:#4B5A75">не стоит</span>') + '</td>' +
+      '<td class="r">' + (s.boughtQty
+        ? s.boughtQty + ' шт' + (s.lastBuy
+            ? ' <span style="color:#4B5A75">· посл. ' + UI.num(s.lastBuy.cost) + '</span>' : '')
+        : '<span style="color:#4B5A75">0</span>') + '</td>' +
       '<td class="r">' + (s.soldQty || '<span style="color:#4B5A75">0</span>') + '</td>' +
       '<td class="r">' + (s.revenue ? UI.num(s.revenue) : '<span style="color:#4B5A75">0</span>') + '</td>' +
       '<td class="r" style="color:#64748B">' + (c.created_at ? UI.dateFull(c.created_at) : '—') + '</td>' +
@@ -3553,17 +3681,469 @@ window.LC_PRICE = (function () {
   function exportCsv() {
     const list = rows();
     const out = [['Категория', 'Название', 'Фирма', 'Объём', 'Артикул', 'Закупка', 'Продажа',
-      'Маржа ₽', 'Маржа %', 'На стеллажах шт', 'Вместимость шт', 'Точек', 'Продано 30д',
-      'Выручка 30д', 'В прайсе с', 'Статус']];
+      'Маржа ₽', 'Маржа %', 'На складе шт', 'На стеллажах шт', 'Вместимость шт', 'Точек',
+      'Закуплено всего шт', 'Продано 30д', 'Выручка 30д', 'В прайсе с', 'Статус']];
     list.forEach(x => out.push([
       UI.catOf(x.c.category).label, x.c.name, x.c.brand || '', x.c.volume || '', x.c.sku || '',
       x.c.cost || 0, x.c.price || 0, x.s.margin, x.s.marginPct,
-      x.s.stock, x.s.capacity, x.s.points, x.s.soldQty, x.s.revenue,
+      x.s.stock, x.s.onRacksQty, x.s.capacity, x.s.points, x.s.boughtQty, x.s.soldQty, x.s.revenue,
       x.c.created_at ? UI.dateFull(x.c.created_at) : '',
       x.c.archived ? 'архив' : 'в работе'
     ]));
     UI.downloadFile('prays-' + UI.today() + '.csv', UI.csv(out));
     UI.toast('Прайс выгружен', 'ok');
+  }
+
+  return { render };
+})();
+
+
+/* ============================================================
+   Lube Control — ЗАКУПКИ
+   Что привезли на склад: дата, товар, поставщик, цена, количество, оплата.
+   Со склада товар потом уезжает на стеллажи.
+   ============================================================ */
+
+window.LC_BUYS = (function () {
+  const CFG = window.LC_CONFIG;
+  const STORE = window.LC_STORE;
+  const UI = window.LC_UI;
+
+  let ctx = null;
+  let period = 90;          // дней; 0 — за всё время
+  let cat = 'all';
+  let supplier = 'all';
+  let payment = 'all';
+  let query = '';
+  let sort = { key: 'date', dir: -1 };
+
+  const PERIODS = [
+    { key: 30, label: '30 дней' },
+    { key: 90, label: '3 месяца' },
+    { key: 365, label: 'Год' },
+    { key: 0, label: 'Всё время' }
+  ];
+
+  /* ---------------- отбор ---------------- */
+
+  function from() {
+    if (!period) return 0;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (period - 1));
+    return d.getTime();
+  }
+
+  function rows() {
+    const q = query.trim().toLowerCase();
+    const since = from();
+    const list = (ctx.purchases || []).filter(p => {
+      if (period && new Date(p.date + 'T00:00:00').getTime() < since) return false;
+      if (cat !== 'all' && p.category !== cat) return false;
+      if (supplier !== 'all' && (p.supplier || '') !== supplier) return false;
+      if (payment !== 'all' && (p.payment || '') !== payment) return false;
+      if (!q) return true;
+      return ((p.name || '') + ' ' + (p.brand || '') + ' ' + (p.sku || '') + ' ' +
+        (p.supplier || '') + ' ' + (p.payment || '') + ' ' + (p.note || '')).toLowerCase().includes(q);
+    });
+
+    const get = {
+      date: x => String(x.date || ''),
+      name: x => (x.name + ' ' + (x.brand || '')).toLowerCase(),
+      supplier: x => (x.supplier || '').toLowerCase(),
+      category: x => UI.catOf(x.category).label,
+      cost: x => Number(x.cost) || 0,
+      qty: x => Number(x.qty) || 0,
+      amount: x => Number(x.amount) || 0,
+      payment: x => (x.payment || '').toLowerCase()
+    }[sort.key] || (x => x.date);
+
+    return list.sort((a, b) => {
+      const va = get(a), vb = get(b);
+      if (va < vb) return -sort.dir;
+      if (va > vb) return sort.dir;
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+  }
+
+  const suppliers = () => [...new Set((ctx.purchases || [])
+    .map(p => (p.supplier || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const payments = () => {
+    const used = (ctx.purchases || []).map(p => (p.payment || '').trim()).filter(Boolean);
+    return [...new Set((CFG.payments || []).concat(used))];
+  };
+
+  /* ---------------- отрисовка ---------------- */
+
+  const TH = [
+    { key: 'date', label: 'Дата поставки' },
+    { key: 'name', label: 'Товар' },
+    { key: 'supplier', label: 'Поставщик' },
+    { key: 'category', label: 'Категория' },
+    { key: null, label: 'Объём' },
+    { key: null, label: 'Артикул' },
+    { key: 'cost', label: 'Цена закуп. ₽', cls: 'r' },
+    { key: 'qty', label: 'Кол-во', cls: 'r' },
+    { key: 'amount', label: 'Сумма ₽', cls: 'r' },
+    { key: 'payment', label: 'Оплата' },
+    { key: null, label: '', cls: 'r' }
+  ];
+
+  function render(host, context) {
+    ctx = context;
+    const list = rows();
+
+    const qty = list.reduce((s, p) => s + (Number(p.qty) || 0), 0);
+    const sum = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const avg = qty ? Math.round(sum / qty) : 0;
+
+    // остаток склада — по всем закупкам, а не только по выбранному периоду
+    const left = STORE.warehouse(ctx.purchases, ctx.ops);
+    const byId = {};
+    (ctx.catalog || []).forEach(c => { byId[c.id] = c; });
+    let stockQty = 0, stockSum = 0;
+    Object.keys(left).forEach(id => {
+      const n = left[id];
+      if (n > 0) { stockQty += n; stockSum += n * (Number((byId[id] || {}).cost) || 0); }
+    });
+
+    // разбивка по способам оплаты
+    const byPay = {};
+    list.forEach(p => {
+      const k = p.payment || 'не указан';
+      byPay[k] = (byPay[k] || 0) + (Number(p.amount) || 0);
+    });
+    const payList = Object.entries(byPay).sort((a, b) => b[1] - a[1]);
+
+    host.innerHTML =
+      '<main class="page">' +
+        '<div class="page-head">' +
+          '<div><h1>Закупки</h1>' +
+            '<p>Что и почём привезли на склад. Отсюда товар уезжает на стеллажи.</p></div>' +
+          '<div class="page-actions">' +
+            '<button class="btn btn-ghost" id="bExport">' + UI.icon('down', 15) + '<span>Выгрузить в CSV</span></button>' +
+            '<button class="btn btn-primary" id="bAdd">' + UI.icon('plus', 15, '#12161F', 2) + '<span>Новая закупка</span></button>' +
+          '</div>' +
+        '</div>' +
+
+        '<section class="kpi-grid five">' +
+          kpi('Закуплено', UI.num(qty) + '<small> шт</small>') +
+          kpi('Потрачено', UI.money(sum), 'var(--amber)') +
+          kpi('Средняя цена', UI.money(avg), '#8494AC') +
+          kpi('Поставщиков', String(suppliers().length)) +
+          kpi('Сейчас на складе', UI.num(stockQty) + '<small> шт</small>',
+            stockQty ? 'var(--green)' : '#8494AC', stockSum ? 'на ' + UI.money(stockSum) : 'всё разъехалось') +
+        '</section>' +
+
+        (payList.length
+          ? '<div class="card flat row" style="gap:18px;flex-wrap:wrap">' +
+              '<span style="font-size:12px;color:#64748B;letter-spacing:.08em;text-transform:uppercase;font-weight:600">' +
+                'По оплате</span>' +
+              payList.map(([k, v]) =>
+                '<span class="row" style="gap:7px"><span style="font-size:13px;color:#B9C6DA">' + UI.esc(k) + '</span>' +
+                '<b class="mono" style="font-size:13px">' + UI.money(v) + '</b></span>').join('') +
+            '</div>'
+          : '') +
+
+        '<div class="toolbar">' +
+          '<div class="filters" id="bPeriod">' +
+            PERIODS.map(p => '<button class="chip' + (period === p.key ? ' active' : '') +
+              '" data-period="' + p.key + '">' + p.label + '</button>').join('') +
+          '</div>' +
+          '<div class="grow"></div>' +
+          select('bCat', cat, [{ v: 'all', t: 'Все категории' }]
+            .concat(CFG.categories.map(c => ({ v: c.key, t: c.label })))) +
+          select('bSupplier', supplier, [{ v: 'all', t: 'Все поставщики' }]
+            .concat(suppliers().map(s => ({ v: s, t: s })))) +
+          select('bPay', payment, [{ v: 'all', t: 'Любая оплата' }]
+            .concat(payments().map(s => ({ v: s, t: s })))) +
+          '<div class="search">' + UI.icon('search', 15, '#64748B', 1.8) +
+            '<input id="bSearch" type="search" placeholder="Товар, поставщик, артикул…" value="' + UI.esc(query) + '"></div>' +
+        '</div>' +
+
+        (list.length
+          ? '<div class="grid-wrap"><table class="grid"><thead><tr>' +
+              TH.map(t => '<th class="' + (t.cls || '') + (t.key ? ' sortable' : '') +
+                (sort.key === t.key ? ' sorted' : '') + '"' +
+                (t.key ? ' data-sort="' + t.key + '"' : '') + '>' + t.label +
+                (sort.key === t.key ? (sort.dir > 0 ? ' ↑' : ' ↓') : '') + '</th>').join('') +
+            '</tr></thead><tbody>' + list.map(row).join('') + '</tbody></table></div>' +
+            '<p style="margin:0;font-size:12px;color:#64748B">Закупок: ' + UI.num(list.length) +
+              ' · на сумму ' + UI.money(sum) + '</p>'
+          : '<div class="empty-state">' +
+              ((ctx.purchases || []).length
+                ? 'За выбранный период закупок нет — смените период или фильтр.'
+                : 'Закупок пока нет. Нажмите «Новая закупка» и внесите первую поставку.') +
+            '</div>') +
+      '</main>';
+
+    bind(host);
+  }
+
+  function kpi(label, value, color, sub) {
+    return '<div class="card kpi compact"><span class="label">' + label + '</span>' +
+      '<span class="value"' + (color ? ' style="color:' + color + '"' : '') + '>' + value + '</span>' +
+      (sub ? '<span style="font-size:11px;color:#64748B">' + UI.esc(sub) + '</span>' : '') + '</div>';
+  }
+
+  function select(id, value, options) {
+    return '<select class="input sm" id="' + id + '" style="width:auto;min-width:160px">' +
+      options.map(o => '<option value="' + UI.esc(o.v) + '"' +
+        (String(o.v) === String(value) ? ' selected' : '') + '>' + UI.esc(o.t) + '</option>').join('') +
+      '</select>';
+  }
+
+  function row(p) {
+    return '<tr data-id="' + UI.esc(p.id) + '">' +
+      '<td class="num" style="white-space:nowrap">' + UI.esc(fmtDate(p.date)) + '</td>' +
+      '<td><div class="prod"><b>' + UI.esc(p.name) + '</b>' +
+        '<small>' + UI.esc(p.brand || '—') + '</small></div></td>' +
+      '<td>' + (p.supplier
+        ? UI.esc(p.supplier)
+        : '<span style="color:#4B5A75">не указан</span>') + '</td>' +
+      '<td>' + UI.catBadge(p.category) + '</td>' +
+      '<td class="num">' + UI.esc(p.volume || '—') + '</td>' +
+      '<td><span class="sku">' + UI.esc(p.sku || '—') + '</span></td>' +
+      '<td class="r">' + UI.num(p.cost) + '</td>' +
+      '<td class="r pos">+' + UI.num(p.qty) + '</td>' +
+      '<td class="r"><b>' + UI.num(p.amount) + '</b></td>' +
+      '<td>' + (p.payment
+        ? '<span class="pill sm neutral">' + UI.esc(p.payment) + '</span>'
+        : '<span style="color:#4B5A75">—</span>') +
+        (p.note ? '<div style="font-size:11px;color:#4B5A75;margin-top:3px">' + UI.esc(p.note) + '</div>' : '') + '</td>' +
+      '<td class="r"><div class="row-act">' +
+        '<button class="icon-btn sm" data-act="edit" title="Изменить">' + UI.icon('edit', 14) + '</button>' +
+        '<button class="icon-btn sm danger" data-act="del" title="Удалить">' + UI.icon('trash', 14) + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    const p = String(d).split('-');
+    return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : d;
+  }
+
+  /* ---------------- события ---------------- */
+
+  function bind(host) {
+    const rerender = () => render(host, ctx);
+
+    host.querySelector('#bPeriod').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-period]');
+      if (!b) return;
+      period = Number(b.dataset.period);
+      rerender();
+    });
+
+    host.querySelector('#bCat').addEventListener('change', e => { cat = e.target.value; rerender(); });
+    host.querySelector('#bSupplier').addEventListener('change', e => { supplier = e.target.value; rerender(); });
+    host.querySelector('#bPay').addEventListener('change', e => { payment = e.target.value; rerender(); });
+
+    host.querySelector('#bSearch').addEventListener('input', (e) => {
+      query = e.target.value;
+      rerender();
+      const el = host.querySelector('#bSearch');
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+
+    host.querySelector('#bAdd').addEventListener('click', () => editModal(null));
+    host.querySelector('#bExport').addEventListener('click', exportCsv);
+
+    const table = host.querySelector('.grid');
+    if (!table) return;
+
+    table.querySelectorAll('[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (sort.key === key) sort.dir = -sort.dir;
+        else sort = { key, dir: key === 'name' || key === 'supplier' || key === 'payment' || key === 'category' ? 1 : -1 };
+        rerender();
+      });
+    });
+
+    table.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const id = b.closest('tr').dataset.id;
+      const p = (ctx.purchases || []).find(x => x.id === id);
+      if (!p) return;
+      if (b.dataset.act === 'edit') editModal(p);
+      if (b.dataset.act === 'del') remove(p);
+    });
+  }
+
+  async function remove(p) {
+    const ok = await UI.confirmBox(
+      'Удалить закупку «' + p.name + '»?',
+      fmtDate(p.date) + ' · ' + p.qty + ' шт на ' + UI.money(p.amount) +
+      '. Остаток склада пересчитается.', 'Удалить', 'btn-danger');
+    if (!ok) return;
+    ctx.act(() => STORE.deletePurchase(p.id, ctx.user), 'Закупка удалена');
+  }
+
+  /* ---------------- окно закупки ---------------- */
+
+  function editModal(p) {
+    const isNew = !p;
+    const active = (ctx.catalog || []).filter(c => !c.archived);
+
+    if (!active.length) {
+      UI.confirmBox('Прайс пустой',
+        'Закупка заводится на товар из прайса. Сначала добавьте позицию в прайсе — ' +
+        'название, фирму, объём и артикул.', 'Понятно').then(() => {});
+      return;
+    }
+
+    let chosen = isNew ? null : p.catalog_id;
+    const today = new Date().toISOString().slice(0, 10);
+    const known = suppliers();
+    const pays = payments();
+
+    UI.modal({
+      title: isNew ? 'Новая закупка' : 'Изменить закупку',
+      subtitle: isNew ? 'Что привезли на склад' : p.name + ' · ' + fmtDate(p.date),
+      wide: true,
+      noFocus: true,
+      body:
+        '<div class="stack-sm" style="gap:14px">' +
+
+          '<div class="field"><label>Товар из прайса</label>' +
+            '<div class="search" style="margin-bottom:8px"><input id="bPick" type="search" ' +
+              'placeholder="Поиск: название, фирма, артикул…"></div>' +
+            '<div class="picker" id="bPicker"></div>' +
+            '<div id="bChosen" style="font-size:12px;color:#64748B;margin-top:6px"></div>' +
+          '</div>' +
+
+          '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px">' +
+            UI.field('Дата поставки', 'b-date', '', 'date', isNew ? today : p.date) +
+            '<div class="field"><label for="b-supplier">Поставщик</label>' +
+              '<input class="input sm" id="b-supplier" list="bSuppliers" placeholder="ООО «Смазка»" value="' +
+                UI.esc(isNew ? '' : (p.supplier || '')) + '">' +
+              '<datalist id="bSuppliers">' + known.map(s => '<option value="' + UI.esc(s) + '">').join('') + '</datalist>' +
+            '</div>' +
+          '</div>' +
+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end">' +
+            UI.field('Цена закупки, ₽', 'b-cost', '320', 'number', isNew ? '' : p.cost) +
+            UI.field('Количество, шт', 'b-qty', '10', 'number', isNew ? '' : p.qty) +
+            '<div class="field"><label>Сумма</label>' +
+              '<div class="input sm mono" id="b-sum" style="display:flex;align-items:center;color:var(--amber)">—</div></div>' +
+          '</div>' +
+
+          '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px">' +
+            '<div class="field"><label for="b-payment">Способ оплаты</label>' +
+              '<select class="input sm" id="b-payment">' +
+                pays.map(s => '<option value="' + UI.esc(s) + '"' +
+                  (!isNew && p.payment === s ? ' selected' : '') + '>' + UI.esc(s) + '</option>').join('') +
+                '<option value="">— не указан —</option>' +
+              '</select></div>' +
+            UI.field('Комментарий', 'b-note', 'номер накладной, договорённости…', 'text', isNew ? '' : (p.note || '')) +
+          '</div>' +
+
+          (isNew
+            ? '<label class="row" style="gap:9px;cursor:pointer;font-size:13px;color:#B9C6DA">' +
+                '<input type="checkbox" id="b-upd" checked style="width:16px;height:16px;accent-color:var(--amber)">' +
+                '<span>Обновить цену закупки в прайсе по этой поставке</span></label>'
+            : '') +
+        '</div>',
+
+      onOpen: (root) => {
+        const picker = root.querySelector('#bPicker');
+        const chosenBox = root.querySelector('#bChosen');
+        const sumBox = root.querySelector('#b-sum');
+
+        const showChosen = () => {
+          const c = active.find(x => x.id === chosen);
+          chosenBox.innerHTML = c
+            ? 'Категория: <b style="color:#B9C6DA">' + UI.esc(UI.catOf(c.category).label) + '</b> · ' +
+              'объём: <b style="color:#B9C6DA">' + UI.esc(c.volume || '—') + '</b> · ' +
+              'артикул: <b style="color:#B9C6DA">' + UI.esc(c.sku || '—') + '</b> · ' +
+              'в прайсе закупка ' + UI.money(c.cost)
+            : 'Выберите товар — категория, объём и артикул подставятся из прайса.';
+        };
+
+        const paint = (q) => {
+          const s = (q || '').trim().toLowerCase();
+          const list = active.filter(c => !s ||
+            (c.name + ' ' + (c.brand || '') + ' ' + (c.sku || '') + ' ' + (c.volume || '')).toLowerCase().includes(s));
+          picker.innerHTML = list.length
+            ? list.map(c =>
+                '<button type="button" class="pick' + (chosen === c.id ? ' on' : '') + '" data-pick="' + c.id + '">' +
+                  '<i class="cat-dot" style="background:' + UI.catOf(c.category).color + '"></i>' +
+                  '<span class="t"><b>' + UI.esc(c.name) + '</b>' +
+                    '<small>' + UI.esc([c.brand, c.volume, c.sku].filter(Boolean).join(' · ')) + '</small></span>' +
+                  '<span class="p">' + UI.money(c.cost) + '</span>' +
+                '</button>').join('')
+            : '<div class="empty-state" style="padding:18px">Ничего не найдено</div>';
+        };
+
+        const recalc = () => {
+          const cost = Number(root.querySelector('#b-cost').value) || 0;
+          const qty = Number(root.querySelector('#b-qty').value) || 0;
+          sumBox.textContent = cost && qty ? UI.money(cost * qty) : '—';
+        };
+
+        paint('');
+        showChosen();
+        recalc();
+
+        root.querySelector('#bPick').addEventListener('input', e => paint(e.target.value));
+        picker.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-pick]');
+          if (!b) return;
+          chosen = b.dataset.pick;
+          picker.querySelectorAll('.pick').forEach(x => x.classList.toggle('on', x.dataset.pick === chosen));
+          showChosen();
+          const costEl = root.querySelector('#b-cost');
+          const c = active.find(x => x.id === chosen);
+          if (c && !costEl.value) { costEl.value = c.cost || ''; recalc(); }
+        });
+        root.querySelector('#b-cost').addEventListener('input', recalc);
+        root.querySelector('#b-qty').addEventListener('input', recalc);
+      },
+
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: isNew ? 'Записать закупку' : 'Сохранить', kind: 'btn-primary',
+          onClick: (root) => {
+            if (!chosen) { UI.toast('Выберите товар из прайса', 'err'); return false; }
+            const get = (id) => root.querySelector('#' + id).value.trim();
+            const qty = Number(get('b-qty'));
+            if (!qty || qty <= 0) { UI.toast('Укажите количество', 'err'); return false; }
+            if (!get('b-date')) { UI.toast('Укажите дату поставки', 'err'); return false; }
+            const data = {
+              catalog_id: chosen, date: get('b-date'), supplier: get('b-supplier'),
+              cost: get('b-cost'), qty: qty, payment: get('b-payment'), note: get('b-note'),
+              updateCost: isNew && root.querySelector('#b-upd') && root.querySelector('#b-upd').checked
+            };
+            ctx.act(
+              () => isNew ? STORE.addPurchase(data, ctx.user) : STORE.updatePurchase(p.id, data, ctx.user),
+              (r) => isNew ? 'Закупка записана: +' + r.qty + ' шт на ' + UI.money(r.amount) : 'Закупка обновлена'
+            );
+            return true;
+          }
+        }
+      ]
+    });
+  }
+
+  /* ---------------- выгрузка ---------------- */
+
+  function exportCsv() {
+    const list = rows();
+    const out = [['Дата поставки', 'Товар', 'Фирма', 'Поставщик', 'Категория', 'Объём', 'Артикул',
+      'Цена закупки', 'Количество', 'Сумма', 'Способ оплаты', 'Комментарий', 'Кто внёс']];
+    list.forEach(p => out.push([
+      fmtDate(p.date), p.name, p.brand || '', p.supplier || '', UI.catOf(p.category).label,
+      p.volume || '', p.sku || '', p.cost || 0, p.qty || 0, p.amount || 0,
+      p.payment || '', p.note || '', p.user_name || ''
+    ]));
+    UI.downloadFile('zakupki-' + UI.today() + '.csv', UI.csv(out));
+    UI.toast('Закупки выгружены: ' + list.length + ' записей', 'ok');
   }
 
   return { render };
@@ -3589,6 +4169,7 @@ window.LC_MOVES = (function () {
     { key: 'move',  label: 'Товар' },
     { key: 'sale',  label: 'Продажи' },
     { key: 'in',    label: 'Приход' },
+    { key: 'buy',   label: 'Закупки' },
     { key: 'audit', label: 'Сверки' },
     { key: 'setup', label: 'Стеллажи' },
     { key: 'price', label: 'Прайс' },
@@ -3610,6 +4191,7 @@ window.LC_MOVES = (function () {
     if (kind === 'all') return true;
     if (kind === 'sale') return o.type === 'sale';
     if (kind === 'in') return o.type === 'restock' || o.type === 'delivery' || o.type === 'cancel';
+    if (kind === 'buy') return g === 'buy';
     if (kind === 'audit') return o.type === 'audit';
     if (kind === 'move') return g === 'move';
     return g === kind;
@@ -3637,6 +4219,7 @@ window.LC_MOVES = (function () {
 
   function totals(rows) {
     let soldQty = 0, revenue = 0, cost = 0, margin = 0, inQty = 0, inSum = 0, auditDiff = 0;
+    let buyQty = 0, buySum = 0;
     rows.forEach(o => {
       if (o.type === 'sale' && !o.cancelled) {
         soldQty += o.qty;
@@ -3648,9 +4231,10 @@ window.LC_MOVES = (function () {
         inQty += o.qty;
         inSum += Number(o.amount || 0);
       }
+      if (o.type === 'purchase') { buyQty += o.qty; buySum += Number(o.amount || 0); }
       if (o.type === 'audit') auditDiff += o.qty;
     });
-    return { soldQty, revenue, cost, margin, inQty, inSum, auditDiff };
+    return { soldQty, revenue, cost, margin, inQty, inSum, auditDiff, buyQty, buySum };
   }
 
   /* ---------------- отрисовка ---------------- */
@@ -3671,13 +4255,15 @@ window.LC_MOVES = (function () {
           '</div>' +
         '</div>' +
 
-        '<section class="kpi-grid five">' +
+        '<section class="kpi-grid six">' +
           kpi('Продано', UI.num(t.soldQty) + '<small> шт</small>') +
           kpi('Выручка', UI.money(t.revenue), '#F2B705') +
           kpi('Себестоимость', UI.money(t.cost), '#8494AC') +
           kpi('Маржа', UI.money(t.margin), t.margin >= 0 ? '#3DDC84' : '#FF5A5F') +
-          kpi('Приход', '+' + UI.num(t.inQty) + '<small> шт</small>',
+          kpi('Отгружено на точки', '+' + UI.num(t.inQty) + '<small> шт</small>',
             '#3DDC84', t.inSum ? 'на ' + UI.money(t.inSum) : '') +
+          kpi('Закуплено', '+' + UI.num(t.buyQty) + '<small> шт</small>',
+            '#7C8CF8', t.buySum ? 'на ' + UI.money(t.buySum) : '') +
         '</section>' +
 
         '<div class="toolbar">' +
@@ -3733,7 +4319,8 @@ window.LC_MOVES = (function () {
 
     return '<tr>' +
       '<td class="num" style="color:#8494AC;white-space:nowrap">' + UI.dateTime(o.created_at) + '</td>' +
-      '<td><span class="sku" style="color:#F2B705">' + UI.esc(o.rack_code || '—') + '</span></td>' +
+      '<td><span class="sku" style="color:' + (o.rack_code ? 'var(--amber)' : '#64748B') + '">' +
+        UI.esc(o.rack_code || 'склад') + '</span></td>' +
       '<td><div class="prod"><b' + (o.cancelled ? ' style="text-decoration:line-through;color:#64748B"' : '') + '>' +
         UI.esc(o.item_name || o.note || '—') + '</b>' +
         '<small>' + UI.esc(o.brand || (o.item_name ? '' : o.note) || '') + '</small></div></td>' +
@@ -3965,10 +4552,12 @@ window.LC_SETTINGS = (function () {
           '<div class="card flat row" style="gap:12px;flex-wrap:wrap">' +
             '<button class="btn btn-ghost btn-sm" id="sDump">Скачать все данные (JSON)</button>' +
             (STORE.mode === 'demo'
-              ? '<button class="btn btn-danger btn-sm" id="sSeed">Пересоздать демо-данные</button>'
+              ? '<button class="btn btn-danger btn-sm" id="sSeed">Очистить все данные</button>'
               : '') +
             '<span style="font-size:12px;color:#64748B">Режим: ' +
-              (STORE.mode === 'demo' ? 'демо, данные в браузере' : 'общая база Supabase') + '</span>' +
+              (STORE.mode === 'demo'
+                ? 'демо, данные в браузере'
+                : 'общая база Supabase — чистить только через панель Supabase') + '</span>' +
           '</div>' +
         '</section>' +
       '</main>';
@@ -4116,7 +4705,8 @@ window.LC_SETTINGS = (function () {
     host.querySelector('#sDump').addEventListener('click', () => {
       const dump = {
         exported_at: new Date().toISOString(),
-        catalog: ctx.catalog, racks: ctx.racks, ops: ctx.ops, requests: ctx.requests
+        catalog: ctx.catalog, racks: ctx.racks, purchases: ctx.purchases,
+        ops: ctx.ops, requests: ctx.requests
       };
       UI.downloadFile('lube-control-' + UI.today() + '.json', JSON.stringify(dump, null, 2), 'application/json');
       UI.toast('Данные выгружены', 'ok');
@@ -4124,12 +4714,13 @@ window.LC_SETTINGS = (function () {
 
     const seed = host.querySelector('#sSeed');
     if (seed) seed.addEventListener('click', async () => {
-      const ok = await UI.confirmBox('Пересоздать демо-данные?',
-        'Все стеллажи, прайс и движения в этом браузере будут заменены стартовым набором.',
-        'Пересоздать', 'btn-danger');
+      const ok = await UI.confirmBox('Очистить все данные?',
+        'Прайс, стеллажи, закупки и все движения в этом браузере будут стёрты без возврата. ' +
+        'Настройки и аккаунты останутся. Сначала имеет смысл скачать выгрузку в JSON.',
+        'Стереть всё', 'btn-danger');
       if (!ok) return;
-      STORE.resetDemo();
-      UI.toast('Демо-данные пересозданы', 'ok');
+      STORE.clearAll();
+      UI.toast('Данные очищены', 'ok');
       ctx.refresh();
     });
   }
@@ -4186,6 +4777,9 @@ window.LC_SETTINGS = (function () {
         (i < C.categories.length - 1 ? ',' : ''));
     });
     L.push('  ],');
+    L.push('');
+    L.push('  /* ---------- Способы оплаты закупок ---------- */');
+    L.push('  payments: [' + (C.payments || []).map(q).join(', ') + '],');
     L.push('');
     L.push('  /* ---------- Аккаунты ----------');
     L.push('     Пароли работают только в демо-режиме. С Supabase пароль проверяет сервер,');
