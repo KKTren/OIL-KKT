@@ -273,13 +273,22 @@ select.input { appearance: none; padding-right: 34px;
 .search input { border: 0; background: none; outline: none; width: 100%; font-size: 13px; }
 .search input::placeholder { color: var(--muted-2); }
 
-/* ---------- Полоса остатка ---------- */
+/* ---------- Остаток квадратиками ----------
+   Один квадратик — одна канистра. Заполненные цветные, пустые места серые. */
 
-.bar { height: 8px; border-radius: 999px; background: var(--track); display: flex; overflow: hidden; }
-.bar > i { display: block; border-radius: 999px; transition: width .35s ease; min-width: 3px; }
-.bar > i.ok { background: var(--green); }
-.bar > i.low { background: var(--orange); }
-.bar > i.empty { background: var(--red); }
+.pips { display: flex; flex-wrap: wrap; gap: 3px; align-content: center; }
+.pips > i {
+  width: 9px; height: 9px; border-radius: 2px;
+  background: var(--track); display: block; flex-shrink: 0;
+  transition: background .2s ease;
+}
+.pips > i.on { background: var(--green); }
+.pips.low > i.on { background: var(--orange); }
+.pips.empty > i.on { background: var(--red); }
+
+/* когда позиций много — запасной вариант полоской */
+.pips.dense { gap: 2px; }
+.pips.dense > i { width: 6px; height: 6px; border-radius: 1px; }
 
 .status-text { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
 .status-text.ok { color: var(--green); }
@@ -610,14 +619,15 @@ select.input { appearance: none; padding-right: 34px;
 .item-row .qty { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .item-row .pct { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
 
-/* Карточки товара у продавца */
-.goods-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.good { display: flex; flex-direction: column; gap: 15px; }
-.good .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.good .title b { font-size: 16px; font-weight: 600; display: block; }
-.good .title small { font-size: 12px; color: var(--muted-2); }
-.good .count { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1; }
-.good .count small { font-size: 16px; color: var(--dimmer); }
+/* Карточки товара у продавца — компактные */
+.goods-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.good { display: flex; flex-direction: column; gap: 9px; padding: 13px 14px; }
+.good .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.good .title b { font-size: 14px; font-weight: 600; display: block; line-height: 1.25; }
+.good .title small { font-size: 11px; color: var(--muted-2); }
+.good .count { font-family: var(--mono); font-size: 19px; font-weight: 600; line-height: 1; }
+.good .count small { font-size: 13px; color: var(--dimmer); }
+.good .btn-lg { height: 38px; font-size: 13px; border-radius: 9px; }
 
 .shift-card { background: linear-gradient(180deg, #1A1608 0%, #111A2C 62%); border-color: #33290C; }
 .shift-card .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #8A7A46; font-weight: 600; }
@@ -646,7 +656,7 @@ select.input { appearance: none; padding-right: 34px;
   .item-row .name { grid-area: name; }
   .item-row .qty { grid-area: qty; text-align: right; }
   .item-row .step-btn { grid-area: btn; }
-  .item-row .bar { grid-area: bar; }
+  .item-row .pips { grid-area: bar; }
   .item-row .pct, .item-row .status-text { display: none; }
   .user-chip .who { display: none; }
   .search { min-width: 0; flex-grow: 1; }
@@ -664,7 +674,7 @@ select.input { appearance: none; padding-right: 34px;
   .kpi-grid, .kpi-grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kpi .value { font-size: 24px; }
   .card { padding: 15px 16px; }
-  .goods-grid { grid-template-columns: minmax(0, 1fr); }
+  .goods-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .page-actions { width: 100%; }
   .page-actions .btn { flex-grow: 1; }
 }
@@ -2160,11 +2170,23 @@ select.input { appearance: none; padding-right: 34px;
   }
   const today = () => new Date().toISOString().slice(0, 10);
 
-  function bar(item) {
+  /**
+   * Остаток квадратиками: сколько стоит на полке — цветные,
+   * сколько не хватает до полного стеллажа — серые.
+   * При большой вместимости квадратики мельчают, чтобы не расползались.
+   */
+  function pips(item) {
     const st = itemStatus(item);
-    const pct = Math.max(itemPct(item), item.qty > 0 ? 4 : 2);
-    return '<div class="bar"><i class="' + st + '" style="width:' + pct + '%"></i></div>';
+    const max = Math.max(0, Number(item.max) || 0);
+    const qty = Math.max(0, Math.min(max, Number(item.qty) || 0));
+    const dense = max > 24;
+    const cells = [];
+    for (let i = 0; i < max; i++) cells.push('<i' + (i < qty ? ' class="on"' : '') + '></i>');
+    return '<div class="pips ' + st + (dense ? ' dense' : '') +
+      '" title="' + qty + ' из ' + max + ' шт">' + cells.join('') + '</div>';
   }
+
+  const bar = pips;   // старое имя оставлено для совместимости
 
   function field(label, id, placeholder, type, value, hint) {
     return '<div class="field"><label for="' + id + '">' + label + '</label>' +
@@ -2175,7 +2197,7 @@ select.input { appearance: none; padding-right: 34px;
 
   window.LC_UI = {
     icon, esc, money, num, time, dateShort, dateTime, dateFull, ago, csv, csvCell, today,
-    itemStatus, itemPct, rackStatus, bar, field,
+    itemStatus, itemPct, rackStatus, bar, pips, field,
     catOf, catBadge, opInfo, OPS,
     STATUS_LABEL, RACK_LABEL, ITEM_LABEL,
     toast, modal, confirmBox, renderTopbar, modeBanner, downloadFile,
@@ -2611,7 +2633,7 @@ window.LC_ADMIN = (function () {
       '<span class="name">' + UI.esc(i.name) +
         '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) + '</small></span>' +
       '<span class="qty">' + i.qty + ' / ' + i.max + ' шт</span>' +
-      UI.bar(i) +
+      UI.pips(i) +
       '<span class="pct">' + UI.itemPct(i) + '%</span>' +
       '<span class="status-text ' + st + '">' + UI.ITEM_LABEL[st] + '</span>' +
       '<button class="step-btn" data-act="minus" data-item="' + i.id + '"' +
@@ -4309,24 +4331,25 @@ window.LC_SELLER = (function () {
     const dim = st === 'empty';
     return '<article class="card good' + cls + '"' + (dim ? ' style="background:var(--card-2)"' : '') + '>' +
       '<div class="top">' +
-        UI.icon('can', 30, dim ? '#4B5A75' : '#F2B705', 1.5) +
-        '<span class="pill ' + st + '" style="height:24px;font-size:11px">' +
-          (st === 'ok' ? 'Норма' : st === 'low' ? 'Осталось мало' : 'Закончилось') +
+        UI.icon('can', 22, dim ? 'var(--dim)' : 'var(--amber)', 1.5) +
+        '<span class="pill sm ' + st + '">' +
+          (st === 'ok' ? 'Норма' : st === 'low' ? 'Мало' : 'Закончилось') +
         '</span>' +
       '</div>' +
       '<div class="title"><b' + (dim ? ' style="color:#8494AC"' : '') + '>' + UI.esc(i.name) + '</b>' +
         '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) +
         (i.price ? ' · ' + UI.money(i.price) : '') + '</small></div>' +
-      '<div class="stack-sm" style="gap:8px">' +
+      '<div class="stack-sm" style="gap:7px">' +
         '<div class="row-between" style="align-items:baseline">' +
-          '<span class="count"' + (st !== 'ok' ? ' style="color:' + (st === 'low' ? '#FFA726' : '#FF5A5F') + '"' : '') + '>' +
+          '<span class="count"' + (st !== 'ok' ? ' style="color:' +
+            (st === 'low' ? 'var(--orange)' : 'var(--red)') + '"' : '') + '>' +
             i.qty + '<small> / ' + i.max + '</small></span>' +
-          '<span class="mono" style="font-size:12px;color:#8494AC">' + UI.itemPct(i) + '%</span>' +
-        '</div>' + UI.bar(i) +
+          '<span class="mono" style="font-size:11px;color:#64748B">' + UI.itemPct(i) + '%</span>' +
+        '</div>' + UI.pips(i) +
       '</div>' +
       (i.qty > 0
         ? '<button class="btn btn-primary btn-lg btn-block" data-act="sell" data-item="' + i.id + '">' +
-            UI.icon('minus', 18, '#12161F', 2.2) + '<span>' + UI.esc(CFG.texts.sellBtn) + '</span></button>'
+            UI.icon('minus', 15, '#12161F', 2.2) + '<span>' + UI.esc(CFG.texts.sellBtn) + '</span></button>'
         : '<button class="btn btn-danger btn-lg btn-block" data-act="request" data-item="' + i.id + '">' +
             (openRequest
               ? (openRequest.status === 'packed' ? 'Поставка едет' : 'Заявка отправлена')
