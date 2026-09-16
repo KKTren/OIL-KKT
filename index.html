@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lube Control — вход</title>
+<meta name="description" content="Мониторинг остатков масла на стеллажах СТО">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F2B705' stroke-width='2'><path d='M12 3.5c3.2 3.6 5.5 6.4 5.5 9.2a5.5 5.5 0 0 1-11 0c0-2.8 2.3-5.6 5.5-9.2Z'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<div class="login-wrap">
+
+  <aside class="login-aside">
+    <div>
+      <div class="brand" style="margin-bottom:40px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c3.2 3.6 5.5 6.4 5.5 9.2a5.5 5.5 0 0 1-11 0c0-2.8 2.3-5.6 5.5-9.2Z"/></svg>
+        <span>Lube Control</span>
+      </div>
+      <h2>Остатки масла на стеллажах СТО — в одном окне</h2>
+      <p>Продавец отмечает продажу в один тап, вы сразу видите, где заканчивается масло, и везёте товар туда, где он нужен.</p>
+
+      <div class="login-points">
+        <div class="login-point">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>
+          <div><b>Живые остатки</b><span>Каждая продажа сразу меняет цифру в панели администратора.</span></div>
+        </div>
+        <div class="login-point">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M12 4.5 2.8 19.5h18.4L12 4.5Z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+          <div><b>Заявки на пополнение</b><span>Продавец жмёт одну кнопку — заявка появляется у вас в маршруте.</span></div>
+        </div>
+        <div class="login-point">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h6.5"/></svg>
+          <div><b>Маршрут доставки</b><span>Список точек на день собирается сам, по критичности остатка.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <small style="font-size:12px;color:#4B5A75">Lube Control · демонстрационная версия</small>
+  </aside>
+
+  <main class="login-panel">
+    <div>
+      <h1 class="display" style="font-size:28px;font-weight:700;margin:0 0 6px">Вход в систему</h1>
+      <p class="muted" style="margin:0;font-size:13px" id="modeLine">Проверяем подключение…</p>
+    </div>
+
+    <form class="login-form" id="loginForm" autocomplete="on">
+      <div class="field">
+        <label for="login">Логин</label>
+        <input class="input" id="login" name="username" type="text" placeholder="admin" autocomplete="username" required>
+      </div>
+
+      <div class="field">
+        <label for="password">Пароль</label>
+        <div class="pw-wrap">
+          <input class="input" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+          <button class="pw-toggle" type="button" id="pwToggle" aria-label="Показать пароль"></button>
+        </div>
+      </div>
+
+      <div class="login-error hidden" id="loginError"></div>
+
+      <button class="btn btn-primary btn-lg btn-block" type="submit" id="submitBtn">Войти</button>
+    </form>
+
+    <div id="quickBlock">
+      <div class="row-between" style="margin-bottom:12px">
+        <span style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#64748B;font-weight:600">Готовые аккаунты</span>
+        <span style="font-size:12px;color:#4B5A75">нажмите, чтобы подставить</span>
+      </div>
+      <div class="accounts" id="accounts"></div>
+    </div>
+  </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/login.js"></script>
+</body>
+</html>
