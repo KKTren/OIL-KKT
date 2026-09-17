@@ -542,6 +542,8 @@ select.input { appearance: none; padding-right: 34px;
   display: flex; align-items: center; gap: 8px;
 }
 .mode-banner.cloud { background: rgba(61,220,132,0.07); border-bottom-color: #14301F; color: var(--green); }
+.mode-banner.err { background: rgba(255,90,95,0.1); border-bottom-color: #3F2226; color: var(--red); }
+.mode-banner b { font-weight: 600; }
 
 .empty-state {
   padding: 40px 20px; text-align: center; color: var(--muted-2); font-size: 14px;
@@ -733,7 +735,19 @@ select.input { appearance: none; padding-right: 34px;
   <div id="view"></div>
 </div>
 
+<!-- Библиотека Supabase. Если основной адрес недоступен (бывает у провайдеров
+     и в некоторых браузерах), подставляем запасной. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+if (!window.supabase) {
+  document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+}
+</script>
+<script>
+if (!window.supabase) {
+  document.write('<script src="https://esm.sh/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+}
+</script>
 
 <!-- Файл настроек. Лежит рядом с index.html. Если его нет — сайт работает
      на значениях по умолчанию, ничего не ломается. -->
@@ -946,6 +960,20 @@ select.input { appearance: none; padding-right: 34px;
       '. Выполните свежий schema.sql в Supabase → SQL Editor, затем: notify pgrst, \'reload schema\';');
   }
 
+  /**
+   * База отказала по правам (Row Level Security). Почти всегда причина одна:
+   * у вошедшего пользователя нет строки в таблице profiles, поэтому база
+   * не знает ни его роли, ни закреплённого стеллажа.
+   */
+  const isRls = (error) =>
+    !!error && (error.code === '42501' || /row-level security/i.test(error.message || ''));
+
+  function rlsError(table) {
+    return new Error('База отказала в записи в «' + table + '»: у вашего пользователя нет профиля ' +
+      'или роли. Выполните fix-profiles.sql в Supabase → SQL Editor — он пропишет роли ' +
+      'для уже заведённых пользователей.');
+  }
+
   const missingColName = (error) => {
     const m = /Could not find the '([^']+)' column/.exec((error && error.message) || '');
     return m ? m[1] : null;
@@ -973,6 +1001,7 @@ select.input { appearance: none; padding-right: 34px;
         throw new Error('В базе нет таблицы «' + table +
           '». Выполните свежий schema.sql в Supabase → SQL Editor.');
       }
+      if (isRls(res.error)) throw rlsError(table);
       throw res.error;
     }
     throw new Error('Не удалось записать в ' + table);
@@ -986,6 +1015,7 @@ select.input { appearance: none; padding-right: 34px;
       noteMissing(table, '*');
       return [];
     }
+    if (isRls(res.error)) throw rlsError(table);
     throw res.error;
   }
 
@@ -1002,6 +1032,7 @@ select.input { appearance: none; padding-right: 34px;
         if (!Object.keys(data).length) return data;
         continue;
       }
+      if (isRls(res.error)) throw rlsError(table);
       throw res.error;
     }
     throw new Error('Не удалось обновить ' + table);
@@ -2193,9 +2224,28 @@ select.input { appearance: none; padding-right: 34px;
     });
   }
 
-  function modeBanner() {
+  function modeBanner(user) {
     const host = document.querySelector('[data-mode-banner]');
     if (!host) return;
+
+    // ключи есть, а библиотека не загрузилась — молча уходить в демо нельзя
+    if (window.LC_STORE.mode === 'demo' && CFG.supabaseUrl && CFG.supabaseAnonKey) {
+      host.className = 'mode-banner err';
+      host.innerHTML = icon('warn', 14) +
+        '<span>Ключи базы прописаны, но библиотека Supabase не загрузилась — сайт работает ' +
+        'на данных этого браузера. Проверьте интернет, блокировщик рекламы или откройте сайт ' +
+        'в другом браузере.</span>';
+      return;
+    }
+
+    if (window.LC_STORE.mode === 'cloud' && user && user.noProfile) {
+      host.className = 'mode-banner err';
+      host.innerHTML = icon('warn', 14) +
+        '<span>Вы вошли, но в базе нет профиля этого пользователя — она не знает вашу роль ' +
+        'и не даст ничего записать. Выполните <b>fix-profiles.sql</b> в Supabase → SQL Editor.</span>';
+      return;
+    }
+
     if (window.LC_STORE.mode === 'demo') {
       host.className = 'mode-banner';
       host.innerHTML = icon('warn', 14) +
@@ -2388,6 +2438,19 @@ select.input { appearance: none; padding-right: 34px;
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* нет доступа */ }
   }
 
+  /**
+   * Не даём запросу к базе висеть вечно: если сети нет или ключи чужие,
+   * человек должен увидеть внятную надпись, а не крутящийся кружок.
+   */
+  function withTimeout(promise, ms, what) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error('База не ответила за ' + Math.round(ms / 1000) + ' с (' + what + '). ' +
+          'Проверьте supabaseUrl и ключ в config.js и доступ к сети.')), ms))
+    ]);
+  }
+
   /** Вход. Возвращает профиль пользователя либо бросает ошибку с понятным текстом. */
   async function signIn(login, password) {
     const acc = findAccount(login);
@@ -2399,23 +2462,33 @@ select.input { appearance: none; padding-right: 34px;
       return user;
     }
 
-    const { data, error } = await STORE.sb.auth.signInWithPassword({
+    const { data, error } = await withTimeout(STORE.sb.auth.signInWithPassword({
       email: emailOf(String(login || '').trim()),
       password: password
-    });
+    }), 20000, 'вход');
     if (error) {
       if (/invalid login/i.test(error.message)) throw new Error('Неверный логин или пароль');
+      if (/email not confirmed/i.test(error.message)) {
+        throw new Error('Пользователь не подтверждён. В Supabase → Authentication → Users ' +
+          'откройте его и включите Auto Confirm User.');
+      }
+      if (/failed to fetch|networkerror/i.test(error.message)) {
+        throw new Error('Не достучались до базы. Проверьте supabaseUrl в config.js и интернет.');
+      }
       throw new Error(error.message);
     }
 
     let profile = null;
     try {
-      const res = await STORE.sb.from('profiles').select('*').eq('id', data.user.id).single();
+      const res = await withTimeout(
+        STORE.sb.from('profiles').select('*').eq('id', data.user.id).single(), 15000, 'профиль');
       profile = res.data;
     } catch (e) { /* профиля может не быть — возьмём данные из конфига */ }
 
     if (!acc && !profile) throw new Error('Пользователь не заведён в системе');
     const user = profileFrom(acc || { login: login, role: 'seller', name: login, rack: null }, profile);
+    // без строки в profiles база не поймёт, кто это, и откажет в любой записи (RLS)
+    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2423,7 +2496,7 @@ select.input { appearance: none; padding-right: 34px;
   /** Текущий пользователь или null. */
   async function current() {
     if (!STORE.cloud) return readLocalSession();
-    const { data } = await STORE.sb.auth.getSession();
+    const { data } = await withTimeout(STORE.sb.auth.getSession(), 15000, 'сессия');
     if (!data || !data.session) { clearLocalSession(); return null; }
     const cached = readLocalSession();
     if (cached) return cached;
@@ -2431,11 +2504,13 @@ select.input { appearance: none; padding-right: 34px;
     const acc = findAccount(login);
     let profile = null;
     try {
-      const res = await STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).single();
+      const res = await withTimeout(
+        STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).single(), 15000, 'профиль');
       profile = res.data;
     } catch (e) { /* без профиля */ }
     if (!acc && !profile) return null;
     const user = profileFrom(acc || { login, role: 'seller', name: login, rack: null }, profile);
+    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2446,7 +2521,7 @@ select.input { appearance: none; padding-right: 34px;
     location.reload();
   }
 
-  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf };
+  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf, withTimeout };
 })();
 
 
@@ -3352,7 +3427,7 @@ window.LC_ADMIN = (function () {
     UI.applyTheme();
     document.title = 'Панель администратора — ' + CFG.texts.brand;
     renderTopbar();
-    UI.modeBanner();
+    UI.modeBanner(ctx.user);
     await refresh();
     STORE.onChange(refresh);
     void CFG;
@@ -5266,7 +5341,7 @@ window.LC_SELLER = (function () {
         '<span style="font-size:12px;font-weight:600;color:var(--green);white-space:nowrap">' +
         UI.esc(CFG.texts.shiftOpen) + '</span></div>'
     });
-    UI.modeBanner();
+    UI.modeBanner(user);
     bind();
     await refresh();
     if (rack) {
