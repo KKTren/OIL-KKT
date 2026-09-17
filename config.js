@@ -7,6 +7,8 @@
 
    Подобрать значения мышкой можно в самом сайте:
    войти администратором → «Настройки» → покрутить → «Скачать config.js».
+
+   Версия от 17.09.2026 — новый проект Supabase (zanyvcvrolwukzmmbskb).
    ============================================================ */
 
 window.LC_CONFIG = {
@@ -15,9 +17,13 @@ window.LC_CONFIG = {
      Пока поля пустые — демо-режим: данные лежат в браузере
      и не видны другим устройствам.
        Project Settings → Data API   → Project URL
-       Project Settings → API Keys   → anon / public          */
+       Project Settings → API Keys   → anon / public
 
-  supabaseUrl: 'https://zanyvcvrolwukzmmbskb.supabase.co/rest/v1/',
+     ВАЖНО: здесь может быть ТОЛЬКО anon / publishable ключ.
+     Ключ service_role в этот файл вставлять нельзя — он даёт
+     полный доступ к базе, а файл виден всему интернету.        */
+
+  supabaseUrl: 'https://zanyvcvrolwukzmmbskb.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphbnl2Y3Zyb2x3dWt6bW1ic2tiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NjEzMDgsImV4cCI6MjEwNTIzNzMwOH0.s4tAW_H9wG9psWGPs5W3GGD1o4lEW9rcdk7ORt8-lKc',
   emailDomain: 'lubecontrol.app',
 
