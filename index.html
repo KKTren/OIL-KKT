@@ -737,7 +737,12 @@ select.input { appearance: none; padding-right: 34px;
 
 <!-- Файл настроек. Лежит рядом с index.html. Если его нет — сайт работает
      на значениях по умолчанию, ничего не ломается. -->
-<script src="config.js" onerror="console.info('config.js не найден — работают значения по умолчанию')"></script>
+<!-- Грузим config.js с меткой времени: иначе браузер и GitHub Pages
+     подсовывают старую копию файла ещё часами после заливки новой. -->
+<script>
+  document.write('<script src="config.js?v=' + Date.now() +
+    '" onerror="console.info(\'config.js не найден — работают значения по умолчанию\')"><\/script>');
+</script>
 
 <script>
 /* ============================================================
@@ -890,6 +895,18 @@ select.input { appearance: none; padding-right: 34px;
   window.LC_FILE = merge(clone(DEFAULTS), fromFile);          // коробка + config.js
   window.LC_CONFIG = merge(clone(window.LC_FILE), readOverrides()); // + панель «Настройки»
   window.LC_HAS_FILE = Object.keys(fromFile).length > 0;
+
+  /* Адрес базы — только из config.js.
+     Раньше настройки из панели лежали в localStorage и перебивали файл: сменишь
+     проект в config.js, а браузер продавца молча ходит в старую (уже удалённую)
+     базу — вход не работает, а в режиме инкогнито всё хорошо. Теперь, если в
+     config.js база указана, она главнее любых локальных правок. Панель по-прежнему
+     задаёт базу, пока файла нет, — так работает первичная настройка. */
+  if (window.LC_FILE.supabaseUrl && window.LC_FILE.supabaseAnonKey) {
+    window.LC_CONFIG.supabaseUrl    = window.LC_FILE.supabaseUrl;
+    window.LC_CONFIG.supabaseAnonKey = window.LC_FILE.supabaseAnonKey;
+    window.LC_CONFIG.emailDomain     = window.LC_FILE.emailDomain || window.LC_CONFIG.emailDomain;
+  }
 
   window.LC_OVERRIDES = {
     read: readOverrides,
