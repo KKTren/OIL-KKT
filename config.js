@@ -17,8 +17,8 @@ window.LC_CONFIG = {
        Project Settings → Data API   → Project URL
        Project Settings → API Keys   → anon / public          */
 
-  supabaseUrl: 'https://wbvyqpooqygivmsutyya.supabase.co',
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndidnlxcG9vcXlnaXZtc3V0eXlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1Nzc4NzksImV4cCI6MjEwNTE1Mzg3OX0.fY0xFjVjSXrw-2t3ipZbwA7UAo1QC2gUn8t__FfBO84',
+  supabaseUrl: 'https://zanyvcvrolwukzmmbskb.supabase.co/rest/v1/',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inphbnl2Y3Zyb2x3dWt6bW1ic2tiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NjEzMDgsImV4cCI6MjEwNTIzNzMwOH0.s4tAW_H9wG9psWGPs5W3GGD1o4lEW9rcdk7ORt8-lKc',
   emailDomain: 'lubecontrol.app',
 
   /* ---------- Правила ---------- */
