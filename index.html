@@ -542,8 +542,6 @@ select.input { appearance: none; padding-right: 34px;
   display: flex; align-items: center; gap: 8px;
 }
 .mode-banner.cloud { background: rgba(61,220,132,0.07); border-bottom-color: #14301F; color: var(--green); }
-.mode-banner.err { background: rgba(255,90,95,0.1); border-bottom-color: #3F2226; color: var(--red); }
-.mode-banner b { font-weight: 600; }
 
 .empty-state {
   padding: 40px 20px; text-align: center; color: var(--muted-2); font-size: 14px;
@@ -735,23 +733,11 @@ select.input { appearance: none; padding-right: 34px;
   <div id="view"></div>
 </div>
 
-<!-- Библиотека Supabase. Если основной адрес недоступен (бывает у провайдеров
-     и в некоторых браузерах), подставляем запасной. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
-if (!window.supabase) {
-  document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
-}
-</script>
-<script>
-if (!window.supabase) {
-  document.write('<script src="https://esm.sh/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
-}
-</script>
 
 <!-- Файл настроек. Лежит рядом с index.html. Если его нет — сайт работает
      на значениях по умолчанию, ничего не ломается. -->
-<script src="config.js" onerror="window.LC_CONFIG_MISSING = true"></script>
+<script src="config.js" onerror="console.info('config.js не найден — работают значения по умолчанию')"></script>
 
 <script>
 /* ============================================================
@@ -943,110 +929,6 @@ if (!window.supabase) {
     });
   }
 
-  /* ---------------- страховка от рассинхрона схемы ----------------
-     Если в базе Supabase ещё нет какой-то из новых колонок (не прогнали
-     свежий schema.sql либо PostgREST держит старый кеш схемы), запись
-     падала бы с «Could not find the 'X' column». Вместо падения выкидываем
-     эту колонку и пробуем снова: данные сохранятся, просто без нового поля.
-     Об этом один раз говорим в консоль. */
-
-  const missingCols = {};
-
-  /** Некоторые браузеры и расширения урезают console — пишем осторожно. */
-  function say(text) {
-    try {
-      const c = window.console;
-      if (c && typeof c.warn === 'function') c.warn(text);
-      else if (c && typeof c.log === 'function') c.log(text);
-    } catch (e) { /* и без записи проживём */ }
-  }
-
-  function noteMissing(table, col) {
-    const key = table + '.' + col;
-    if (missingCols[key]) return;
-    missingCols[key] = true;
-    say('Lube Control: в базе нет колонки ' + key +
-      '. Выполните свежий schema.sql в Supabase → SQL Editor, затем: notify pgrst, \'reload schema\';');
-  }
-
-  /**
-   * База отказала по правам (Row Level Security). Почти всегда причина одна:
-   * у вошедшего пользователя нет строки в таблице profiles, поэтому база
-   * не знает ни его роли, ни закреплённого стеллажа.
-   */
-  const isRls = (error) =>
-    !!error && (error.code === '42501' || /row-level security/i.test(error.message || ''));
-
-  function rlsError(table) {
-    return new Error('База отказала в записи в «' + table + '»: у вашего пользователя нет профиля ' +
-      'или роли. Выполните fix-profiles.sql в Supabase → SQL Editor — он пропишет роли ' +
-      'для уже заведённых пользователей.');
-  }
-
-  const missingColName = (error) => {
-    const m = /Could not find the '([^']+)' column/.exec((error && error.message) || '');
-    return m ? m[1] : null;
-  };
-
-  const missingTable = (error) =>
-    !!error && (error.code === 'PGRST205' || error.code === '42P01' ||
-      /Could not find the table|relation .* does not exist/i.test(error.message || ''));
-
-  /** insert с отбрасыванием колонок, которых нет в базе. */
-  async function sbInsert(table, row, wantRow) {
-    const data = Object.assign({}, row);
-    for (let i = 0; i < 12; i++) {
-      const q = sb.from(table).insert(data);
-      const res = wantRow ? await q.select().single() : await q;
-      if (!res.error) return res.data || data;
-      const col = missingColName(res.error);
-      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
-        noteMissing(table, col);
-        delete data[col];
-        continue;
-      }
-      if (missingTable(res.error)) {
-        noteMissing(table, '*');
-        throw new Error('В базе нет таблицы «' + table +
-          '». Выполните свежий schema.sql в Supabase → SQL Editor.');
-      }
-      if (isRls(res.error)) throw rlsError(table);
-      throw res.error;
-    }
-    throw new Error('Не удалось записать в ' + table);
-  }
-
-  /** Чтение таблицы, которой может не быть в старой базе: тогда просто пусто. */
-  async function sbSelect(table, build) {
-    const res = await build(sb.from(table).select('*'));
-    if (!res.error) return res.data || [];
-    if (missingTable(res.error)) {
-      noteMissing(table, '*');
-      return [];
-    }
-    if (isRls(res.error)) throw rlsError(table);
-    throw res.error;
-  }
-
-  /** update с той же страховкой. build(query) навешивает .eq(...) и прочее. */
-  async function sbUpdate(table, patch, build) {
-    const data = Object.assign({}, patch);
-    for (let i = 0; i < 12; i++) {
-      const res = await build(sb.from(table).update(data));
-      if (!res.error) return data;
-      const col = missingColName(res.error);
-      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
-        noteMissing(table, col);
-        delete data[col];
-        if (!Object.keys(data).length) return data;
-        continue;
-      }
-      if (isRls(res.error)) throw rlsError(table);
-      throw res.error;
-    }
-    throw new Error('Не удалось обновить ' + table);
-  }
-
   const listeners = [];
   const uid = () =>
     (crypto.randomUUID ? crypto.randomUUID()
@@ -1135,7 +1017,9 @@ if (!window.supabase) {
       return readLocal().catalog.slice()
         .sort((a, b) => (a.name + a.brand).localeCompare(b.name + b.brand));
     }
-    return await sbSelect('catalog', q => q.order('name'));
+    const { data, error } = await sb.from('catalog').select('*').order('name');
+    if (error) throw error;
+    return data || [];
   }
 
   async function addCatalogItem(data, user) {
@@ -1168,7 +1052,8 @@ if (!window.supabase) {
       localChanged();
       return row;
     }
-    await sbInsert('catalog', row);
+    const { error } = await sb.from('catalog').insert(row);
+    if (error) throw error;
     await logOp({ type: 'price_add', item_name: row.name, brand: row.brand, sku: row.sku,
       note: [row.brand, row.volume].filter(Boolean).join(' · '),
       user_login: user.login, user_name: user.name });
@@ -1198,11 +1083,13 @@ if (!window.supabase) {
       localChanged();
       return c;
     }
-    await sbUpdate('catalog', patch, q => q.eq('id', id));
-    await sbUpdate('items', {
+    const { error } = await sb.from('catalog').update(patch).eq('id', id);
+    if (error) throw error;
+    const { error: e2 } = await sb.from('items').update({
       name: patch.name, brand: patch.brand, volume: patch.volume, sku: patch.sku,
       category: patch.category, price: patch.price, cost: patch.cost
-    }, q => q.eq('catalog_id', id));
+    }).eq('catalog_id', id);
+    if (e2) throw e2;
     await logOp({ type: 'price_edit', item_name: patch.name, brand: patch.brand, sku: patch.sku,
       note: 'закупка ' + patch.cost + ' / продажа ' + patch.price,
       user_login: user.login, user_name: user.name });
@@ -1222,7 +1109,8 @@ if (!window.supabase) {
       localChanged();
       return c;
     }
-    await sbUpdate('catalog', { archived: !!archived }, q => q.eq('id', id));
+    const { error } = await sb.from('catalog').update({ archived: !!archived }).eq('id', id);
+    if (error) throw error;
     await logOp({ type: archived ? 'price_archive' : 'price_restore', item_name: '',
       user_login: user.login, user_name: user.name, note: id });
   }
@@ -1259,8 +1147,10 @@ if (!window.supabase) {
         .sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
           String(b.created_at).localeCompare(String(a.created_at)));
     }
-    return await sbSelect('purchases',
-      q => q.order('date', { ascending: false }).order('created_at', { ascending: false }));
+    const { data, error } = await sb.from('purchases').select('*')
+      .order('date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   }
 
   function purchaseRow(data, cat, user) {
@@ -1303,7 +1193,8 @@ if (!window.supabase) {
       st.purchases.unshift(row);
       writeLocal(st);
     } else {
-      await sbInsert('purchases', row);
+      const { error } = await sb.from('purchases').insert(row);
+      if (error) throw error;
     }
 
     await logOp({
@@ -1343,7 +1234,8 @@ if (!window.supabase) {
     const { data: rows, error: e0 } = await sb.from('purchases').select('*').eq('id', id).single();
     if (e0) throw e0;
     const row = purchaseRow(Object.assign({}, data, { id: id, created_at: rows.created_at }), cat, user);
-    await sbUpdate('purchases', row, q => q.eq('id', id));
+    const { error } = await sb.from('purchases').update(row).eq('id', id);
+    if (error) throw error;
     return row;
   }
 
@@ -1463,7 +1355,9 @@ if (!window.supabase) {
       writeLocal(st);
       return row;
     }
-    return await sbInsert('ops', row, true);
+    const { data, error } = await sb.from('ops').insert(row).select().single();
+    if (error) throw error;
+    return data;
   }
 
   /** Меняет остаток позиции на delta и пишет операцию в журнал. */
@@ -1487,7 +1381,8 @@ if (!window.supabase) {
     const next = Math.max(0, Math.min(item.max, item.qty + delta));
     if (next === item.qty) throw new Error(delta < 0 ? 'Позиция уже пустая' : 'Больше не влезет — стеллаж полный');
     const applied = next - item.qty;
-    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
+    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
+    if (e2) throw e2;
     await logOp(opRow(item, applied, op, next));
     return { item: { ...item, qty: next }, applied };
   }
@@ -1534,7 +1429,8 @@ if (!window.supabase) {
     if (e1) throw e1;
     const next = Math.max(0, Math.min(item.max, Math.round(value)));
     const diff = next - item.qty;
-    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
+    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
+    if (e2) throw e2;
     if (diff !== 0) {
       await logOp({
         ...op, item_id: item.id, item_name: item.name, brand: item.brand, sku: item.sku,
@@ -1586,8 +1482,9 @@ if (!window.supabase) {
       writeLocal(st);
       return;
     }
-    await sbUpdate('requests', { status: 'done' },
-      q => q.eq('rack_code', rackCode).neq('status', 'done'));
+    const { error } = await sb.from('requests').update({ status: 'done' })
+      .eq('rack_code', rackCode).neq('status', 'done');
+    if (error) throw error;
   }
 
   async function createRequest(rackCode, note, user) {
@@ -1605,7 +1502,8 @@ if (!window.supabase) {
       localChanged();
       return row;
     }
-    await sbInsert('requests', row);
+    const { error } = await sb.from('requests').insert(row);
+    if (error) throw error;
     await logOp({ rack_code: rackCode, type: 'request', note: note, user_login: user.login, user_name: user.name });
     return row;
   }
@@ -1627,7 +1525,9 @@ if (!window.supabase) {
       if (n) { writeLocal(st); localChanged(); }
       return n;
     }
-    await sbUpdate('requests', { seen_at: now }, q => q.in('id', list).is('seen_at', null));
+    const { error } = await sb.from('requests').update({ seen_at: now })
+      .in('id', list).is('seen_at', null);
+    if (error) throw error;
     return list.length;
   }
 
@@ -1670,12 +1570,14 @@ if (!window.supabase) {
         created_by: user.login, created_by_name: user.name,
         seen_at: now, packed_at: null, packed_by: '', created_at: now
       };
-      await sbInsert('requests', req);
+      const { error } = await sb.from('requests').insert(req);
+      if (error) throw error;
     }
     if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
-    await sbUpdate('requests', {
+    const { error: e1 } = await sb.from('requests').update({
       status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name
-    }, q => q.eq('id', req.id));
+    }).eq('id', req.id);
+    if (e1) throw e1;
     await logOp({ rack_code: rackCode, type: 'packed', note: note || 'поставка собрана',
       user_login: user.login, user_name: user.name });
     return req;
@@ -1690,7 +1592,8 @@ if (!window.supabase) {
       localChanged();
       return;
     }
-    await sbUpdate('requests', { status: 'done' }, q => q.eq('id', id));
+    const { error } = await sb.from('requests').update({ status: 'done' }).eq('id', id);
+    if (error) throw error;
   }
 
   async function addRack(data, user) {
@@ -1708,8 +1611,8 @@ if (!window.supabase) {
       localChanged();
       return row;
     }
-    try { await sbInsert('racks', row); }
-    catch (error) { throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error); }
+    const { error } = await sb.from('racks').insert(row);
+    if (error) throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error);
     await logOp({ rack_code: row.code, type: 'rack_add', user_login: user.login, user_name: user.name, note: row.station });
     return row;
   }
@@ -1740,7 +1643,8 @@ if (!window.supabase) {
       localChanged();
       return r;
     }
-    await sbUpdate('racks', patch, q => q.eq('code', code));
+    const { error } = await sb.from('racks').update(patch).eq('code', code);
+    if (error) throw error;
     await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name,
       note: patch.station || (data.photo !== undefined ? 'фото обновлено' : 'правка карточки') });
     return patch;
@@ -1777,7 +1681,8 @@ if (!window.supabase) {
       .eq('rack_code', rackCode).eq('catalog_id', cat.id);
     if (e0) throw e0;
     if (exist && exist.length) throw new Error('Эта позиция уже стоит на стеллаже');
-    await sbInsert('items', row);
+    const { error } = await sb.from('items').insert(row);
+    if (error) throw error;
     await logOp({ rack_code: rackCode, item_id: row.id, catalog_id: cat.id, item_name: row.name, brand: row.brand,
       sku: row.sku, type: 'item_add', qty: row.qty, qty_after: row.qty,
       cost: row.cost, price: row.price, amount: row.qty * row.cost,
@@ -1826,7 +1731,8 @@ if (!window.supabase) {
     const { data: it, error: e1 } = await sb.from('items').select('*').eq('id', itemId).single();
     if (e1) throw e1;
     const qty = Math.min(it.qty, value);
-    await sbUpdate('items', { max: value, qty }, q => q.eq('id', itemId));
+    const { error } = await sb.from('items').update({ max: value, qty }).eq('id', itemId);
+    if (error) throw error;
     await logOp({ rack_code: it.rack_code, item_id: it.id, item_name: it.name, brand: it.brand,
       type: 'item_max', qty_after: qty, user_login: user.login, user_name: user.name,
       note: 'вместимость ' + value });
@@ -1855,7 +1761,8 @@ if (!window.supabase) {
       localChanged();
       return;
     }
-    await sbUpdate('ops', { cancelled: true }, q => q.eq('id', opId));
+    const { error } = await sb.from('ops').update({ cancelled: true }).eq('id', opId);
+    if (error) throw error;
   }
 
   /* ---------------- подписка на изменения ---------------- */
@@ -2233,37 +2140,15 @@ if (!window.supabase) {
     });
   }
 
-  function modeBanner(user) {
+  function modeBanner() {
     const host = document.querySelector('[data-mode-banner]');
     if (!host) return;
-
-    // ключи есть, а библиотека не загрузилась — молча уходить в демо нельзя
-    if (window.LC_STORE.mode === 'demo' && CFG.supabaseUrl && CFG.supabaseAnonKey) {
-      host.className = 'mode-banner err';
-      host.innerHTML = icon('warn', 14) +
-        '<span>Ключи базы прописаны, но библиотека Supabase не загрузилась — сайт работает ' +
-        'на данных этого браузера. Проверьте интернет, блокировщик рекламы или откройте сайт ' +
-        'в другом браузере.</span>';
-      return;
-    }
-
-    if (window.LC_STORE.mode === 'cloud' && user && user.noProfile) {
-      host.className = 'mode-banner err';
-      host.innerHTML = icon('warn', 14) +
-        '<span>Вы вошли, но в базе нет профиля этого пользователя — она не знает вашу роль ' +
-        'и не даст ничего записать. Выполните <b>fix-profiles.sql</b> в Supabase → SQL Editor.</span>';
-      return;
-    }
-
     if (window.LC_STORE.mode === 'demo') {
       host.className = 'mode-banner';
       host.innerHTML = icon('warn', 14) +
         '<span>Демо-режим: данные хранятся только в этом браузере и не видны другим устройствам. ' +
-        (window.LC_CONFIG_MISSING
-          ? 'Файла <b>config.js</b> рядом с index.html нет — положите его в корень репозитория, ' +
-            'туда же, где лежит index.html, и впишите в него ключи базы.'
-          : 'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
-            '(или в разделе «Настройки»).') + '</span>';
+        'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
+        '(или в разделе «Настройки»).</span>';
     } else {
       host.className = 'mode-banner cloud';
       host.innerHTML = icon('check', 14) + '<span>Общая база подключена — изменения видны всем сразу.</span>';
@@ -2450,19 +2335,6 @@ if (!window.supabase) {
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* нет доступа */ }
   }
 
-  /**
-   * Не даём запросу к базе висеть вечно: если сети нет или ключи чужие,
-   * человек должен увидеть внятную надпись, а не крутящийся кружок.
-   */
-  function withTimeout(promise, ms, what) {
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(
-        () => reject(new Error('База не ответила за ' + Math.round(ms / 1000) + ' с (' + what + '). ' +
-          'Проверьте supabaseUrl и ключ в config.js и доступ к сети.')), ms))
-    ]);
-  }
-
   /** Вход. Возвращает профиль пользователя либо бросает ошибку с понятным текстом. */
   async function signIn(login, password) {
     const acc = findAccount(login);
@@ -2474,33 +2346,23 @@ if (!window.supabase) {
       return user;
     }
 
-    const { data, error } = await withTimeout(STORE.sb.auth.signInWithPassword({
+    const { data, error } = await STORE.sb.auth.signInWithPassword({
       email: emailOf(String(login || '').trim()),
       password: password
-    }), 20000, 'вход');
+    });
     if (error) {
       if (/invalid login/i.test(error.message)) throw new Error('Неверный логин или пароль');
-      if (/email not confirmed/i.test(error.message)) {
-        throw new Error('Пользователь не подтверждён. В Supabase → Authentication → Users ' +
-          'откройте его и включите Auto Confirm User.');
-      }
-      if (/failed to fetch|networkerror/i.test(error.message)) {
-        throw new Error('Не достучались до базы. Проверьте supabaseUrl в config.js и интернет.');
-      }
       throw new Error(error.message);
     }
 
     let profile = null;
     try {
-      const res = await withTimeout(
-        STORE.sb.from('profiles').select('*').eq('id', data.user.id).single(), 15000, 'профиль');
+      const res = await STORE.sb.from('profiles').select('*').eq('id', data.user.id).single();
       profile = res.data;
     } catch (e) { /* профиля может не быть — возьмём данные из конфига */ }
 
     if (!acc && !profile) throw new Error('Пользователь не заведён в системе');
     const user = profileFrom(acc || { login: login, role: 'seller', name: login, rack: null }, profile);
-    // без строки в profiles база не поймёт, кто это, и откажет в любой записи (RLS)
-    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2508,7 +2370,7 @@ if (!window.supabase) {
   /** Текущий пользователь или null. */
   async function current() {
     if (!STORE.cloud) return readLocalSession();
-    const { data } = await withTimeout(STORE.sb.auth.getSession(), 15000, 'сессия');
+    const { data } = await STORE.sb.auth.getSession();
     if (!data || !data.session) { clearLocalSession(); return null; }
     const cached = readLocalSession();
     if (cached) return cached;
@@ -2516,13 +2378,11 @@ if (!window.supabase) {
     const acc = findAccount(login);
     let profile = null;
     try {
-      const res = await withTimeout(
-        STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).single(), 15000, 'профиль');
+      const res = await STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).single();
       profile = res.data;
     } catch (e) { /* без профиля */ }
     if (!acc && !profile) return null;
     const user = profileFrom(acc || { login, role: 'seller', name: login, rack: null }, profile);
-    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2533,7 +2393,7 @@ if (!window.supabase) {
     location.reload();
   }
 
-  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf, withTimeout };
+  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf };
 })();
 
 
@@ -3439,7 +3299,7 @@ window.LC_ADMIN = (function () {
     UI.applyTheme();
     document.title = 'Панель администратора — ' + CFG.texts.brand;
     renderTopbar();
-    UI.modeBanner(ctx.user);
+    UI.modeBanner();
     await refresh();
     STORE.onChange(refresh);
     void CFG;
@@ -5353,7 +5213,7 @@ window.LC_SELLER = (function () {
         '<span style="font-size:12px;font-weight:600;color:var(--green);white-space:nowrap">' +
         UI.esc(CFG.texts.shiftOpen) + '</span></div>'
     });
-    UI.modeBanner(user);
+    UI.modeBanner();
     bind();
     await refresh();
     if (rack) {
