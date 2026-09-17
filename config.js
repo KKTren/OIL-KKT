@@ -17,7 +17,7 @@ window.LC_CONFIG = {
        Project Settings → Data API   → Project URL
        Project Settings → API Keys   → anon / public          */
 
-  supabaseUrl: 'https://sfbtgricmexysrjfomtp.supabase.co/rest/v1/',
+  supabaseUrl: 'https://sfbtgricmexysrjfomtp.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmYnRncmljbWV4eXNyamZvbXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTgwNzMsImV4cCI6MjEwNTIzNDA3M30.AgdHMJZ4Yue2mLG0_FofA5JmFBQ4LgbQ0bAjG-IjErQ',
   emailDomain: 'lubecontrol.app',
 
