@@ -751,7 +751,7 @@ if (!window.supabase) {
 
 <!-- Файл настроек. Лежит рядом с index.html. Если его нет — сайт работает
      на значениях по умолчанию, ничего не ломается. -->
-<script src="config.js" onerror="console.info('config.js не найден — работают значения по умолчанию')"></script>
+<script src="config.js" onerror="window.LC_CONFIG_MISSING = true"></script>
 
 <script>
 /* ============================================================
@@ -952,11 +952,20 @@ if (!window.supabase) {
 
   const missingCols = {};
 
+  /** Некоторые браузеры и расширения урезают console — пишем осторожно. */
+  function say(text) {
+    try {
+      const c = window.console;
+      if (c && typeof c.warn === 'function') c.warn(text);
+      else if (c && typeof c.log === 'function') c.log(text);
+    } catch (e) { /* и без записи проживём */ }
+  }
+
   function noteMissing(table, col) {
     const key = table + '.' + col;
     if (missingCols[key]) return;
     missingCols[key] = true;
-    console.warn('Lube Control: в базе нет колонки ' + key +
+    say('Lube Control: в базе нет колонки ' + key +
       '. Выполните свежий schema.sql в Supabase → SQL Editor, затем: notify pgrst, \'reload schema\';');
   }
 
@@ -2250,8 +2259,11 @@ if (!window.supabase) {
       host.className = 'mode-banner';
       host.innerHTML = icon('warn', 14) +
         '<span>Демо-режим: данные хранятся только в этом браузере и не видны другим устройствам. ' +
-        'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
-        '(или в разделе «Настройки»).</span>';
+        (window.LC_CONFIG_MISSING
+          ? 'Файла <b>config.js</b> рядом с index.html нет — положите его в корень репозитория, ' +
+            'туда же, где лежит index.html, и впишите в него ключи базы.'
+          : 'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
+            '(или в разделе «Настройки»).') + '</span>';
     } else {
       host.className = 'mode-banner cloud';
       host.innerHTML = icon('check', 14) + '<span>Общая база подключена — изменения видны всем сразу.</span>';
