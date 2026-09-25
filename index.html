@@ -702,7 +702,6 @@ select.input { appearance: none; padding-right: 34px;
 }
 
 @media (max-width: 900px) {
-  .shift-chip { display: none; }
   .divider-v { display: none; }
   .topbar > .row:first-child { min-width: 0; gap: 12px; }
   .topbar .brand span { font-size: 13px; letter-spacing: 0.1em; }
@@ -862,6 +861,63 @@ tr.low-margin td:first-child { box-shadow: inset 3px 0 0 var(--orange); }
   .pay-mode { grid-template-columns: 1fr; }
   .chat-input .btn span { display: none; }
   .chat-input .btn { padding: 0 14px; }
+}
+
+/* ---------- Версия 10: меню «Связь», смена, стеллаж продавца ---------- */
+
+.menu-wrap { position: relative; }
+.menu-btn { gap: 6px; }
+.menu-btn .badge { margin-left: 2px; }
+.menu-btn .badge[hidden] { display: none; }
+.menu-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 70;
+  width: min(340px, calc(100vw - 24px)); padding: 14px;
+  background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+  box-shadow: 0 16px 40px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 10px;
+}
+.menu-pop-title { font-family: var(--display); font-size: 14px; font-weight: 600; }
+.menu-pop .contact-grid { grid-template-columns: 1fr 1fr; }
+
+.shift-btn {
+  height: 32px; padding: 0 12px 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  border: 1px solid var(--line-strong); color: var(--muted); background: transparent;
+}
+.shift-btn i { width: 8px; height: 8px; border-radius: 999px; background: var(--dim); display: block; }
+.shift-btn.on { background: rgba(61,220,132,.1); border-color: rgba(61,220,132,.3); color: var(--green); }
+.shift-btn.on i { background: var(--green); box-shadow: 0 0 0 3px rgba(61,220,132,.18); }
+.shift-btn:hover { border-color: #2E3E5C; }
+
+.shift-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: var(--r); border: 1px dashed var(--line-strong); background: var(--card-2);
+  font-size: 13px; color: var(--text-2);
+}
+
+.rack-info { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.rack-info .line { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12px; }
+.rack-info .line a { color: var(--amber); }
+.photo-add {
+  width: 100%; min-height: 96px; border: 1px dashed var(--line-strong); border-radius: var(--r-lg);
+  display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px;
+}
+.photo-add:hover { border-color: var(--amber); color: var(--amber); }
+.pill.shift-on { background: rgba(61,220,132,0.11); border: 1px solid rgba(61,220,132,0.26); color: var(--green); }
+.pill.shift-off { background: #151E30; border: 1px solid var(--line); color: var(--muted-2); }
+
+@media (max-width: 900px) {
+  .menu-pop { position: fixed; left: 12px; right: 12px; top: 72px; width: auto; max-height: calc(100vh - 90px); overflow-y: auto; }
+  .good .btn-lg { white-space: normal; height: auto; min-height: 50px; padding: 8px 10px; line-height: 1.25; text-align: center; }
+  .menu-btn-t { display: none; }
+  .shift-btn { padding: 0 10px; }
+}
+@media (max-width: 560px) {
+  .shift-btn .t-long { display: none; }
+  .topbar .rack-title-text { display: none; }
+  .topbar .user-chip { display: none; }
+  .topbar > .row:first-child { overflow: hidden; flex-shrink: 1; }
+  .topbar > .row:last-child { gap: 8px !important; flex-shrink: 0; }
+  .menu-btn { padding: 0 10px; }
 }
 </style>
 </head>
@@ -2080,12 +2136,17 @@ if (!window.supabase) {
    * photo — строка data:image/... либо '' (убрать), либо undefined (не трогать).
    */
   async function updateRack(code, data, user) {
+    const seller = user && user.role !== 'admin';
+    if (seller && user.rack !== code) throw new Error('Можно менять только свой стеллаж');
     const patch = {};
-    ['station', 'address', 'post', 'operator'].forEach(k => {
-      if (data[k] !== undefined) patch[k] = String(data[k] || '').trim();
+    // продавец меняет фото, описание, телефон, часы работы и место; название, адрес и продавца — только админ
+    (seller ? RACK_SELLER_KEYS : RACK_TEXT_KEYS).forEach(k => {
+      if (data[k] !== undefined) patch[k] = String(data[k] || '').trim().slice(0, k === 'description' ? 600 : 200);
     });
     if (data.photo !== undefined) patch.photo = data.photo || '';
     if (patch.station !== undefined && !patch.station) throw new Error('Название СТО не может быть пустым');
+    if (!Object.keys(patch).length) throw new Error('Менять нечего');
+    const what = rackEditNote(patch, data);
 
     if (!cloud) {
       const st = readLocal();
@@ -2096,14 +2157,81 @@ if (!window.supabase) {
       try { writeLocalStrict(st); }
       catch (e) { throw new Error('Не хватило места в браузере для фото. Подключите Supabase или уменьшите размер фото в настройках.'); }
       await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name,
-        note: (patch.station && patch.station !== wasStation ? wasStation + ' → ' + patch.station : '') +
-          (data.photo !== undefined ? (data.photo ? ' · фото обновлено' : ' · фото убрано') : '') });
+        note: (patch.station && patch.station !== wasStation ? wasStation + ' → ' + patch.station + ' · ' : '') + what });
       localChanged();
       return r;
     }
-    await sbUpdate('racks', patch, q => q.eq('code', code));
-    await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name,
-      note: patch.station || (data.photo !== undefined ? 'фото обновлено' : 'правка карточки') });
+    await rackUpdateChecked(code, patch);
+    await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name, note: what });
+    return patch;
+  }
+
+  const RACK_TEXT_KEYS = ['station', 'address', 'post', 'operator', 'description', 'phone', 'hours'];
+  const RACK_SELLER_KEYS = ['post', 'description', 'phone', 'hours'];
+  const RACK_V10 = ['description', 'phone', 'hours', 'shift_open', 'shift_at', 'shift_by'];
+
+  function rackEditNote(patch, data) {
+    const names = { station: 'название', address: 'адрес', post: 'место', operator: 'продавец',
+      description: 'описание', phone: 'телефон', hours: 'часы работы' };
+    const parts = Object.keys(patch).filter(k => names[k]).map(k => names[k]);
+    if (data.photo !== undefined) parts.push(data.photo ? 'фото обновлено' : 'фото убрано');
+    return parts.length ? 'изменено: ' + parts.join(', ') : 'правка карточки';
+  }
+
+  /**
+   * Запись в racks с проверкой: база молча не обновляет строку, если нет прав,
+   * и молча теряет поля, если нет новых колонок. И то и другое — понятной ошибкой.
+   */
+  async function rackUpdateChecked(code, patch) {
+    const data = Object.assign({}, patch);
+    const lost = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await sb.from('racks').update(data).eq('code', code).select('code');
+      if (!res.error) {
+        if (!res.data || !res.data.length) {
+          throw new Error('База не дала сохранить стеллаж. Выполните fix-v10.sql в Supabase → SQL Editor ' +
+            '(в нём права продавца на свой стеллаж).');
+        }
+        if (lost.length) {
+          throw new Error('Не сохранилось: ' + lost.join(', ') + ' — в базе нет новых колонок. Выполните fix-v10.sql.');
+        }
+        return data;
+      }
+      const col = missingColName(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
+        noteMissing('racks', col);
+        delete data[col];
+        if (RACK_V10.indexOf(col) >= 0) lost.push(col);
+        if (!Object.keys(data).length) {
+          throw new Error('Не сохранилось: ' + lost.join(', ') + ' — в базе нет новых колонок. Выполните fix-v10.sql.');
+        }
+        continue;
+      }
+      if (isRls(res.error)) throw rlsError('racks');
+      throw new Error(res.error.message || 'Не удалось сохранить стеллаж');
+    }
+    throw new Error('Не удалось сохранить стеллаж');
+  }
+
+  /**
+   * Смена продавца: «Работаю» / «Не работаю». Отметка лежит в карточке стеллажа
+   * (её видят админ и курьер), а в журнал пишется начало и конец смены.
+   */
+  async function setShift(code, open, user, note) {
+    if (user.role !== 'admin' && user.rack !== code) throw new Error('Это не ваш стеллаж');
+    const patch = { shift_open: !!open, shift_at: new Date().toISOString(), shift_by: user.name || user.login };
+    if (!cloud) {
+      const st = readLocal();
+      const r = st.racks.find(x => x.code === code);
+      if (!r) throw new Error('Стеллаж не найден');
+      Object.assign(r, patch);
+      writeLocal(st);
+    } else {
+      await rackUpdateChecked(code, patch);
+    }
+    await logOp({ rack_code: code, type: open ? 'shift_open' : 'shift_close', item_name: user.name || user.login,
+      user_login: user.login, user_name: user.name, note: note || '' });
+    if (!cloud) localChanged();
     return patch;
   }
 
@@ -3190,7 +3318,7 @@ if (!window.supabase) {
     getPurchases, addPurchase, updatePurchase, deletePurchase, warehouse,
     changeQty, setQty, restock, restockAll, logOp,
     createRequest, closeRequest, closeRequests, markRequestsSeen, markPacked,
-    addRack, updateRack, addItem, removeItem, setMax, cancelOp,
+    addRack, updateRack, setShift, addItem, removeItem, setMax, cancelOp,
     adjustItem, importCatalog, importPurchases, deleteOps, editOp, opEffect,
     loadSettings, settingsReady, clearHistory, getStock, reservedFrom,
     getPriceHistory, paidOf, getSuppliers, saveSupplier, getPayments, addPayment, deletePayment, supplierLedger,
@@ -3329,6 +3457,8 @@ if (!window.supabase) {
     packed:        { label: 'Поставка собрана',  sign: 0,  color: '#3DDC84', group: 'setup' },
     rack_add:      { label: 'Новый стеллаж',     sign: 0,  color: '#8494AC', group: 'setup' },
     rack_edit:     { label: 'Правка стеллажа',   sign: 0,  color: '#8494AC', group: 'setup' },
+    shift_open:    { label: 'Смена начата',      sign: 0,  color: '#3DDC84', group: 'shift' },
+    shift_close:   { label: 'Смена закончена',   sign: 0,  color: '#8494AC', group: 'shift' },
     price_add:     { label: 'Прайс: добавлено',  sign: 0,  color: '#8494AC', group: 'price' },
     price_edit:    { label: 'Прайс: изменено',   sign: 0,  color: '#8494AC', group: 'price' },
     price_archive: { label: 'Прайс: в архив',    sign: 0,  color: '#8494AC', group: 'price' },
@@ -3517,7 +3647,7 @@ if (!window.supabase) {
         (o.rackLabel
           ? '<span class="divider-v"></span><div class="row" style="gap:10px;min-width:0">' +
             '<span class="rack-code">' + esc(o.rackLabel) + '</span>' +
-            '<span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(o.rackTitle || '') + '</span></div>'
+            '<span class="rack-title-text" style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(o.rackTitle || '') + '</span></div>'
           : '<nav class="nav">' + nav.map(n =>
               '<button class="' + (n.active ? 'active' : '') + '" data-nav="' + esc(n.key) + '">' + esc(n.label) +
                 (n.badge ? '<span class="badge">' + esc(n.badge) + '</span>' : '') + '</button>'
@@ -3808,7 +3938,73 @@ if (!window.supabase) {
     '</section>';
   }
 
+  /**
+   * Кнопка «Связь» для шапки продавца и курьера. По нажатию раскрывается
+   * меню: чат с администратором и кнопки мессенджеров из «Настроек».
+   */
+  function contactMenuButton(unread) {
+    return '<div class="menu-wrap">' +
+      '<button class="btn btn-ghost btn-sm menu-btn" type="button" data-contact-menu aria-haspopup="true" title="Связь с администратором">' +
+        icon('chat', 16) + '<span class="menu-btn-t">Связь</span>' +
+        '<span class="badge" data-chat-badge' + (unread ? '' : ' hidden') + '>' + (unread || '') + '</span>' +
+      '</button></div>';
+  }
+
+  function contactMenuHtml(unread) {
+    const list = contactList();
+    const title = (CFG.contacts && CFG.contacts.title) || 'Связь с администратором';
+    return '<div class="menu-pop" role="menu">' +
+      '<div class="menu-pop-title">' + esc(title) + '</div>' +
+      '<button class="btn btn-primary btn-block" data-open-chat>' + icon('chat', 16, '#12161F', 2) +
+        '<span>Написать в чат</span>' + (unread ? '<span class="badge">' + unread + '</span>' : '') + '</button>' +
+      (list.length
+        ? '<div class="contact-grid">' + list.map(contactButton).join('') + '</div>'
+        : '<div style="font-size:12px;color:#64748B;line-height:1.5">Мессенджеры администратор ещё не указал — пишите в чат.</div>') +
+    '</div>';
+  }
+
+  function closeMenus() { document.querySelectorAll('.menu-pop').forEach(el => el.remove()); }
+
+  // одно меню на всю страницу: открыть по кнопке, закрыть по клику мимо или Esc
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-contact-menu]');
+    if (btn) {
+      const wrap = btn.closest('.menu-wrap');
+      const open = wrap.querySelector('.menu-pop');
+      closeMenus();
+      if (!open) {
+        const badge = btn.querySelector('[data-chat-badge]');
+        wrap.insertAdjacentHTML('beforeend', contactMenuHtml(badge && !badge.hidden ? Number(badge.textContent) || 0 : 0));
+      }
+      return;
+    }
+    if (e.target.closest('[data-open-chat]')) {
+      closeMenus();
+      if (window.LC_CHAT) window.LC_CHAT.openDrawer();
+      return;
+    }
+    if (!e.target.closest('.menu-pop')) closeMenus();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenus(); });
+
+  /** Обновить счётчик непрочитанных на кнопке «Связь». */
+  function setChatBadge(n) {
+    document.querySelectorAll('[data-chat-badge]').forEach(b => { b.textContent = n || ''; b.hidden = !n; });
+  }
+
+  /** «работает с 09:12» / «не работает» — отметка продавца на точке. */
+  function shiftPill(r) {
+    if (!r || r.shift_open === undefined || r.shift_open === null) return '';
+    if (r.shift_open) {
+      const today = r.shift_at && new Date(r.shift_at).toDateString() === new Date().toDateString();
+      return '<span class="pill sm shift-on" title="' + esc((r.shift_by || '') + ' начал(а) смену ' + (r.shift_at ? dateTime(r.shift_at) : '')) + '">' +
+        'работает' + (r.shift_at ? ' с ' + (today ? time(r.shift_at) : dateTime(r.shift_at)) : '') + '</span>';
+    }
+    return '<span class="pill sm shift-off" title="' + esc(r.shift_at ? 'смена закончена ' + dateTime(r.shift_at) : 'смену ещё не начинали') + '">не работает</span>';
+  }
+
   window.LC_UI = {
+    contactMenuButton, setChatBadge, closeMenus, shiftPill,
     combo, CONTACT_KINDS, contactHref, contactShort, contactList, contactsCard,
     icon, esc, money, num, time, dateShort, dateTime, dateFull, ago, csv, csvCell, today,
     itemStatus, itemPct, rackStatus, bar, pips, field,
@@ -4284,9 +4480,13 @@ window.LC_ADMIN = (function () {
               UI.icon('camera', 20) + '</button>') +
           '<span class="rack-code">' + code + '</span>' +
           '<div class="rack-title" style="min-width:0"><b>' + UI.esc(r.station) + '</b>' +
-          '<small>' + UI.esc([r.address, r.post, r.operator].filter(Boolean).join(' · ')) + '</small></div>' +
+          '<small>' + UI.esc([r.address, r.post, r.operator].filter(Boolean).join(' · ')) +
+            (r.phone ? ' · <a href="tel:' + UI.esc(String(r.phone).replace(/[^\d+]/g, '')) + '">' + UI.esc(r.phone) + '</a>' : '') + '</small>' +
+          (r.description ? '<small style="display:block;margin-top:2px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' +
+            UI.esc(r.description) + '">' + UI.esc(r.description) + '</small>' : '') + '</div>' +
         '</div>' +
         '<div class="row" style="gap:12px">' +
+          UI.shiftPill(r) +
           '<span style="font-size:12px;color:#64748B">' +
             (lastOp ? 'обновлено ' + UI.ago(lastOp.created_at) : 'операций не было') + '</span>' +
           (packed ? '<span class="pill ok">Поставка собрана</span>' : '') +
@@ -4840,7 +5040,15 @@ window.LC_ADMIN = (function () {
             UI.combo('Пост', 'r-post', 'пост 1', r.post, postOptions()) +
             UI.combo('Продавец', 'r-operator', 'Имя Ф.', r.operator, operatorOptions()) +
           '</div>' +
-          '<p style="margin:0;font-size:12px;color:#64748B">Код стеллажа (' + UI.esc(r.code) +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            UI.field('Телефон точки', 'r-phone', '+7 900 000-00-00', 'tel', r.phone || '') +
+            UI.combo('Часы работы', 'r-hours', 'пн–сб 9:00–19:00', r.hours || '',
+              ['пн–пт 9:00–18:00', 'пн–сб 9:00–19:00', 'ежедневно 9:00–20:00', 'круглосуточно'].concat(ctx.racks.map(x => x.hours))) +
+          '</div>' +
+          '<div class="field"><label for="r-desc">Описание</label>' +
+            '<textarea class="input sm" id="r-desc" rows="2" maxlength="600" style="height:auto;padding:10px 12px;resize:vertical" ' +
+              'placeholder="Как найти, что важно знать курьеру">' + UI.esc(r.description || '') + '</textarea></div>' +
+          '<p style="margin:0;font-size:12px;color:#64748B">Фото, описание, телефон, часы и место продавец может менять сам. Код стеллажа (' + UI.esc(r.code) +
             ') не меняется — к нему привязаны продажи и логин продавца.</p>' +
         '</div>',
       onOpen: (root) => {
@@ -4881,7 +5089,8 @@ window.LC_ADMIN = (function () {
             if (!get('r-station')) { UI.toast('Название СТО не может быть пустым', 'err'); return false; }
             const data = {
               station: get('r-station'), address: get('r-address'),
-              post: get('r-post'), operator: get('r-operator')
+              post: get('r-post'), operator: get('r-operator'),
+              phone: get('r-phone'), hours: get('r-hours'), description: get('r-desc')
             };
             if (touched) data.photo = photo;
             ctx.act(() => STORE.updateRack(code, data, ctx.user), 'Стеллаж обновлён');
@@ -7034,6 +7243,7 @@ window.LC_MOVES = (function () {
     { key: 'price', label: 'Прайс' },
     { key: 'users', label: 'Сотрудники' },
     { key: 'money', label: 'Оплаты' },
+    { key: 'shift', label: 'Смены' },
     { key: 'history', label: 'Правки истории' },
     { key: 'all',   label: 'Всё' }
   ];
@@ -8513,7 +8723,6 @@ window.LC_SETTINGS = (function () {
     { key: 'requestBtn',     label: 'Кнопка заявки' },
     { key: 'deliveryBtn',    label: 'Кнопка приёма поставки' },
     { key: 'auditBtn',       label: 'Кнопка сверки' },
-    { key: 'shiftOpen',      label: 'Значок смены' },
     { key: 'hint',           label: 'Подсказка продавцу', long: true }
   ];
 
@@ -8604,7 +8813,7 @@ window.LC_SETTINGS = (function () {
             UI.CONTACT_KINDS.map(contactRow).join('') +
           '</div>' +
           '<div class="card flat stack-sm" style="gap:10px">' +
-            '<span style="font-size:12px;color:#64748B">Так увидит продавец:</span>' +
+            '<span style="font-size:12px;color:#64748B">Так увидят продавец и курьер — в меню «Связь» вверху страницы:</span>' +
             '<div id="sContactPreview"></div>' +
           '</div>' +
         '</section>' +
@@ -9388,20 +9597,36 @@ window.LC_SELLER = (function () {
     if (!rack) {
       $('goods').innerHTML = '<div class="empty-state">За вами пока не закреплён стеллаж. Обратитесь к администратору.</div>';
       $('log').innerHTML = '';
-      $('side').innerHTML = UI.contactsCard({ chat: true, unread: window.LC_CHAT.unread() });
+      $('side').innerHTML = '<div class="card flat" style="font-size:13px;color:#8494AC">Связаться с администратором — кнопка «Связь» вверху.</div>';
+      paintTopbar();
       return;
     }
 
+    paintTopbar();
     $('rackTitle').textContent = 'Мой стеллаж · ' + rack.code;
     $('rackMeta').textContent = [rack.station, rack.address, rack.post].filter(Boolean).join(' · ');
     $('todayDate').textContent = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
+    const tel = String(rack.phone || '').replace(/[^\d+]/g, '');
+    $('rackInfo').innerHTML =
+      (rack.description ? '<div style="white-space:pre-wrap">' + UI.esc(rack.description) + '</div>' : '') +
+      '<div class="line">' +
+        (rack.phone ? '<span>' + UI.icon('phone', 13) + ' <a href="tel:' + UI.esc(tel) + '">' + UI.esc(rack.phone) + '</a></span>' : '') +
+        (rack.hours ? '<span>' + UI.icon('clock', 13) + ' ' + UI.esc(rack.hours) + '</span>' : '') +
+        (!rack.description && !rack.phone && !rack.hours
+          ? '<span>Добавьте описание, телефон точки и часы работы — кнопка «Изменить стеллаж»</span>' : '') +
+      '</div>';
+
+    $('shiftNote').innerHTML = rack.shift_open ? ''
+      : '<div class="shift-note"><span>' + UI.icon('clock', 15) + ' Смена не начата — администратор видит, что вас нет на месте.</span>' +
+        '<button class="btn btn-primary btn-sm" data-shift="open">Начать смену</button></div>';
 
     $('rackPhoto').innerHTML = rack.photo
       ? '<figure class="photo-hero" style="margin:0" data-photo>' +
           '<img src="' + rack.photo + '" alt="Фото стеллажа ' + UI.esc(rack.code) + '">' +
           '<figcaption>' + UI.esc(rack.code + ' · ' + rack.station) + ' — так стеллаж должен выглядеть</figcaption>' +
         '</figure>'
-      : '';
+      : '<button class="photo-add" type="button" data-edit-rack>' + UI.icon('camera', 20) + '<span>Добавить фото стеллажа</span></button>';
 
     $('goods').innerHTML = rack.items.length
       ? rack.items.map(goodCard).join('')
@@ -9511,8 +9736,6 @@ window.LC_SELLER = (function () {
             '<span style="font-size:11px;color:#64748B;text-align:center">Кнопка оживёт, когда администратор соберёт поставку</span>') +
       '</section>' +
 
-      UI.contactsCard({ chat: true, unread: window.LC_CHAT.unread() }) +
-
       '<section class="card flat stack-sm" style="gap:9px">' +
         '<span style="font-size:12px;font-weight:600;color:#F2B705;letter-spacing:.06em;text-transform:uppercase">Подсказка</span>' +
         '<span style="font-size:13px;color:#8494AC;line-height:1.55">' + UI.esc(CFG.texts.hint) + '</span>' +
@@ -9540,6 +9763,13 @@ window.LC_SELLER = (function () {
   async function sell(itemId) {
     const it = itemById(itemId);
     if (!it) return;
+    if (!rack.shift_open) {
+      const ok = await UI.confirmBox('Смена не начата',
+        'Начать смену и записать продажу «' + it.name + '»?', 'Начать смену и продать');
+      if (!ok) return;
+      try { await STORE.setShift(rack.code, true, user); rack.shift_open = true; }
+      catch (err) { UI.toast(err.message, 'err'); return; }
+    }
     await act(
       () => STORE.changeQty(itemId, -1, { type: 'sale', user_login: user.login, user_name: user.name }),
       'Продажа записана: ' + it.name + ' · ' + UI.money(it.price)
@@ -9682,7 +9912,145 @@ window.LC_SELLER = (function () {
 
     $('side').addEventListener('click', (e) => {
       if (e.target.closest('#btnDelivery')) acceptDelivery();
-      if (e.target.closest('[data-open-chat]')) window.LC_CHAT.openDrawer();
+    });
+
+    // смена, правка стеллажа — кнопки есть и в шапке, и на странице
+    document.addEventListener('click', (e) => {
+      const sh = e.target.closest('[data-shift]');
+      if (sh) { toggleShift(sh.dataset.shift === 'open'); return; }
+      if (e.target.closest('[data-edit-rack]')) editRack();
+    });
+  }
+
+  /* ---------------- смена: работаю / не работаю ---------------- */
+
+  function paintTopbar() {
+    // меню «Связь» открыто — не перерисовываем шапку под рукой
+    if ($('topbar').querySelector('.menu-pop')) return;
+    const on = !!(rack && rack.shift_open);
+    UI.renderTopbar($('topbar'), user, {
+      rackLabel: (rack && rack.code) || user.rack || '—',
+      rackTitle: rack ? rack.station + (rack.address ? ' · ' + rack.address : '') : '',
+      right:
+        (rack
+          ? '<button class="shift-btn' + (on ? ' on' : '') + '" type="button" data-shift="' + (on ? 'close' : 'open') + '" title="' +
+              (on ? 'Смена идёт с ' + UI.time(rack.shift_at) + '. Нажмите, чтобы закончить' : 'Нажмите, когда начнёте работать') + '">' +
+              '<i></i><span>' + (on ? 'Работаю' : 'Не работаю') + '</span>' +
+              (on && rack.shift_at ? '<span class="t-long" style="font-weight:500;opacity:.75">с ' + UI.time(rack.shift_at) + '</span>' : '') +
+            '</button>'
+          : '') +
+        UI.contactMenuButton(window.LC_CHAT.unread())
+    });
+  }
+
+  async function toggleShift(open) {
+    if (!rack || busy) return;
+    if (open) {
+      await act(() => STORE.setShift(rack.code, true, user), 'Смена начата. Хорошей работы!');
+      return;
+    }
+    const since = rack.shift_at || startOfDay();
+    const mine = todayOps.filter(o => o.type === 'sale' && !o.cancelled && o.user_login === user.login &&
+      String(o.created_at) >= String(since));
+    const qty = mine.reduce((s, o) => s + o.qty, 0);
+    const sum = mine.reduce((s, o) => s + Number(o.amount || 0), 0);
+    const bonus = Math.round(sum * CFG.bonusPercent / 100);
+    const ok = await UI.modal({
+      title: 'Закончить смену?',
+      subtitle: rack.shift_at ? 'Смена идёт с ' + UI.time(rack.shift_at) + ' · ' + UI.ago(rack.shift_at).replace(' назад', '') : '',
+      body: '<div class="hist-kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">' +
+          '<div class="card flat"><span class="label">Продано</span><b>' + qty + ' шт</b></div>' +
+          '<div class="card flat"><span class="label">Выручка</span><b>' + UI.money(sum) + '</b></div>' +
+          '<div class="card flat"><span class="label">Ваш бонус</span><b style="color:var(--amber)">' + UI.money(bonus) + '</b></div>' +
+        '</div>' +
+        '<p style="margin:12px 0 0;font-size:12px;color:#64748B">Администратор увидит, что вы не на месте. Продажи можно отмечать и после — сайт предложит начать смену.</p>',
+      actions: [
+        { label: 'Остаюсь', value: false },
+        { label: 'Закончить смену', kind: 'btn-danger', value: true }
+      ]
+    });
+    if (!ok) return;
+    await act(() => STORE.setShift(rack.code, false, user, 'продано ' + qty + ' шт на ' + UI.money(sum)), 'Смена закончена');
+  }
+
+  /* ---------------- мой стеллаж: фото, описание, телефон ---------------- */
+
+  async function editRack() {
+    if (!rack) return;
+    const r = rack;
+    let photo = r.photo || '';
+    let touched = false;
+    await UI.modal({
+      title: 'Мой стеллаж · ' + r.code,
+      subtitle: r.station + (r.address ? ' · ' + r.address : '') + ' — название и адрес меняет администратор',
+      wide: true,
+      body:
+        '<div class="stack-sm" style="gap:14px">' +
+          '<div class="photo-drop">' +
+            '<div id="spBox">' + (photo ? '<img src="' + photo + '" alt="Фото стеллажа">' : '<div class="ph">' + UI.icon('camera', 22) + '</div>') + '</div>' +
+            '<div class="stack-sm grow" style="gap:8px;min-width:0">' +
+              '<div style="font-size:13px;font-weight:500">Фото стеллажа</div>' +
+              '<div style="font-size:12px;color:#64748B" id="spInfo">' +
+                (photo ? 'Загружено · ' + UI.photoSize(photo) : 'Снимите стеллаж целиком, когда он полный — так видно, как должно быть') + '</div>' +
+              '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+                '<button type="button" class="btn btn-ghost btn-sm" id="spPick">' + UI.icon('camera', 14) + '<span>' + (photo ? 'Заменить фото' : 'Снять или выбрать') + '</span></button>' +
+                '<button type="button" class="btn btn-ghost btn-sm' + (photo ? '' : ' hidden') + '" id="spClear">Убрать</button>' +
+              '</div>' +
+              '<input type="file" accept="image/*" id="spFile" class="hidden">' +
+            '</div>' +
+          '</div>' +
+          '<div class="field"><label for="s-desc">Описание</label>' +
+            '<textarea class="input sm" id="s-desc" rows="3" maxlength="600" style="height:auto;padding:10px 12px;resize:vertical" ' +
+              'placeholder="Где стоит стеллаж, как найти, что важно знать курьеру">' + UI.esc(r.description || '') + '</textarea>' +
+            '<span class="hint">Видят администратор и курьер</span></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            UI.field('Телефон для связи', 's-phone', '+7 900 000-00-00', 'tel', r.phone || '', 'курьер сможет позвонить перед приездом') +
+            UI.combo('Часы работы', 's-hours', 'пн–сб 9:00–19:00', r.hours || '',
+              ['пн–пт 9:00–18:00', 'пн–сб 9:00–19:00', 'ежедневно 9:00–20:00', 'ежедневно 8:00–22:00', 'круглосуточно']) +
+          '</div>' +
+          UI.combo('Где стоит стеллаж', 's-post', 'пост 1', r.post || '', ['пост 1', 'пост 2', 'пост 3', 'касса', 'у входа', 'зона ожидания']) +
+        '</div>',
+      onOpen: (root) => {
+        const file = root.querySelector('#spFile');
+        const box = root.querySelector('#spBox');
+        const info = root.querySelector('#spInfo');
+        const clear = root.querySelector('#spClear');
+        root.querySelector('#spPick').addEventListener('click', () => file.click());
+        file.addEventListener('change', async () => {
+          const f = file.files && file.files[0];
+          if (!f) return;
+          info.textContent = 'Обрабатываю…';
+          try {
+            photo = await UI.compressImage(f, CFG.rules.photoWidth, CFG.rules.photoQuality);
+            touched = true;
+            box.innerHTML = '<img src="' + photo + '" alt="Фото стеллажа">';
+            info.textContent = 'Готово · ' + UI.photoSize(photo) + ' · сохранится по кнопке ниже';
+            clear.classList.remove('hidden');
+          } catch (err) { info.textContent = err.message; }
+          file.value = '';
+        });
+        clear.addEventListener('click', () => {
+          photo = ''; touched = true;
+          box.innerHTML = '<div class="ph">' + UI.icon('camera', 22) + '</div>';
+          info.textContent = 'Фото будет убрано после сохранения';
+          clear.classList.add('hidden');
+        });
+      },
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Сохранить', kind: 'btn-primary',
+          onClick: (root) => {
+            const get = (id) => root.querySelector('#' + id).value.trim();
+            const phone = get('s-phone');
+            if (phone && phone.replace(/\D/g, '').length < 5) { UI.toast('Проверьте номер телефона', 'err'); return false; }
+            const data = { description: get('s-desc'), phone, hours: get('s-hours'), post: get('s-post') };
+            if (touched) data.photo = photo;
+            act(() => STORE.updateRack(r.code, data, user), 'Стеллаж обновлён');
+            return true;
+          }
+        }
+      ]
     });
   }
 
@@ -9700,10 +10068,13 @@ window.LC_SELLER = (function () {
       '</div>' +
       '<div class="split">' +
         '<div class="stack">' +
+          '<div id="shiftNote"></div>' +
           '<div class="section-head">' +
-            '<h2 id="rackTitle">Мой стеллаж</h2>' +
-            '<span class="mono" style="font-size:12px;color:#64748B" id="rackMeta"></span>' +
+            '<div style="min-width:0"><h2 id="rackTitle">Мой стеллаж</h2>' +
+              '<span class="mono" style="font-size:12px;color:#64748B" id="rackMeta"></span></div>' +
+            '<button class="btn btn-ghost btn-sm" type="button" data-edit-rack>' + UI.icon('edit', 14) + '<span>Изменить стеллаж</span></button>' +
           '</div>' +
+          '<div class="rack-info" id="rackInfo"></div>' +
           '<div id="rackPhoto"></div>' +
           '<div class="goods-grid" id="goods"></div>' +
           '<section class="card stack-sm" style="margin-top:4px">' +
@@ -9725,25 +10096,13 @@ window.LC_SELLER = (function () {
     UI.applyTheme();
     document.title = CFG.texts.sellerTitle + ' — ' + CFG.texts.brand;
     $('view').innerHTML = template();
-    UI.renderTopbar($('topbar'), user, {
-      rackLabel: user.rack || '—',
-      rackTitle: '',
-      right: '<div class="row shift-chip" style="gap:8px;height:30px;padding:0 12px;border-radius:999px;' +
-        'background:rgba(61,220,132,.1);border:1px solid rgba(61,220,132,.24)">' +
-        '<span style="width:7px;height:7px;border-radius:999px;background:var(--green)"></span>' +
-        '<span style="font-size:12px;font-weight:600;color:var(--green);white-space:nowrap">' +
-        UI.esc(CFG.texts.shiftOpen) + '</span></div>'
-    });
+    paintTopbar();
     UI.modeBanner(user);
     bind();
     await refresh();
-    if (rack) {
-      const el = $('topbar').querySelector('.row span[style*="ellipsis"]');
-      if (el) el.textContent = rack.station + (rack.address ? ' · ' + rack.address : '');
-    }
     STORE.onChange(refresh);
     setInterval(renderLog, 30000);
-    window.LC_CHAT.init(user, { fab: true, onBadge: () => { if (rack) renderSide(); else render(); } }).catch(() => {});
+    window.LC_CHAT.init(user, { onBadge: (n) => UI.setChatBadge(n) }).catch(() => {});
   }
 
   return { mount };
@@ -9830,7 +10189,7 @@ window.LC_COURIER = (function () {
           kpi('Ждут сборки', todo.length, todo.length ? 'var(--orange)' : '') +
           kpi('Свободно на складе', freeQty + '<small> шт</small>', freeQty ? 'var(--green)' : 'var(--red)') +
         '</section>' +
-        '<div id="courierContacts">' + UI.contactsCard({ chat: true, unread: window.LC_CHAT.unread() }) + '</div>' +
+
 
         '<section class="stack-sm" style="gap:10px">' +
           '<div class="section-head"><h2>Везу — поставить на полку</h2></div>' +
@@ -9869,6 +10228,11 @@ window.LC_COURIER = (function () {
           (r.address ? '<div style="font-size:12px;color:#8494AC">' + UI.esc(r.address) + ' · ' +
             '<a href="' + mapLink(r) + '" target="_blank" rel="noopener" style="color:var(--amber)">на карте</a></div>' : '') +
           (r.operator ? '<div style="font-size:11px;color:#64748B">продавец: ' + UI.esc(r.operator) + '</div>' : '') +
+          '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">' + UI.shiftPill(r) +
+            (r.phone ? '<a class="pill sm neutral" href="tel:' + UI.esc(String(r.phone).replace(/[^\d+]/g, '')) + '">' +
+              UI.icon('phone', 12) + '&nbsp;' + UI.esc(r.phone) + '</a>' : '') +
+            (r.hours ? '<span class="pill sm neutral">' + UI.esc(r.hours) + '</span>' : '') + '</div>' +
+          (r.description ? '<div style="font-size:12px;color:#8494AC;margin-top:4px;white-space:pre-wrap">' + UI.esc(r.description) + '</div>' : '') +
         '</div></div>' + (pill || '') + '</div>';
   }
 
@@ -9985,9 +10349,6 @@ window.LC_COURIER = (function () {
       if (b.dataset.act === 'pack') pack(b.dataset.rack);
       if (b.dataset.act === 'deliver') deliver(b.dataset.rack);
     });
-    $('view').addEventListener('click', (e) => {
-      if (e.target.closest('[data-open-chat]')) window.LC_CHAT.openDrawer();
-    });
   }
 
   async function mount(currentUser) {
@@ -9995,19 +10356,13 @@ window.LC_COURIER = (function () {
     UI.applyTheme();
     document.title = 'Доставка — ' + CFG.texts.brand;
     UI.renderTopbar($('topbar'), user, {
-      right: '<span class="pill sm neutral" style="color:#7C8CF8">курьер</span>'
+      right: '<span class="pill sm neutral" style="color:#7C8CF8">курьер</span>' + UI.contactMenuButton(0)
     });
     UI.modeBanner(user);
     bind();
     await refresh();
     STORE.onChange(refresh);
-    window.LC_CHAT.init(user, {
-      fab: true,
-      onBadge: () => {
-        const box = $('courierContacts');
-        if (box) box.innerHTML = UI.contactsCard({ chat: true, unread: window.LC_CHAT.unread() });
-      }
-    }).catch(() => {});
+    window.LC_CHAT.init(user, { onBadge: (n) => UI.setChatBadge(n) }).catch(() => {});
   }
 
   return { mount };
