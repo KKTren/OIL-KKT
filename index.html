@@ -389,6 +389,25 @@ select.input { appearance: none; padding-right: 34px;
   animation: pop .16s ease-out;
 }
 .modal.wide { max-width: 640px; }
+.modal.xwide { max-width: 1080px; }
+
+/* загрузка из файла */
+.imp-drop {
+  border: 1.5px dashed var(--line-strong, #2A3957); border-radius: 12px; padding: 26px 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  color: var(--muted, #8494AC); font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.imp-drop:hover, .imp-drop.over { border-color: var(--amber); background: rgba(242,183,5,0.05); color: var(--text); }
+.imp-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.imp-map label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #64748B; min-width: 0; }
+.imp-map label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.imp-map select.input { height: 34px; font-size: 12px; }
+.imp-sum { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-prev { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.imp-prev .grid { min-width: 760px; font-size: 12px; }
+.imp-prev .grid td, .imp-prev .grid th { padding: 7px 10px; }
+.imp-opts { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.imp-opts label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 @keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .modal-head h3 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 4px; }
@@ -542,6 +561,8 @@ select.input { appearance: none; padding-right: 34px;
   display: flex; align-items: center; gap: 8px;
 }
 .mode-banner.cloud { background: rgba(61,220,132,0.07); border-bottom-color: #14301F; color: var(--green); }
+.mode-banner.err { background: rgba(255,90,95,0.1); border-bottom-color: #3F2226; color: var(--red); }
+.mode-banner b { font-weight: 600; }
 
 .empty-state {
   padding: 40px 20px; text-align: center; color: var(--muted-2); font-size: 14px;
@@ -612,9 +633,11 @@ select.input { appearance: none; padding-right: 34px;
 
 .item-row {
   display: grid;
-  grid-template-columns: minmax(150px, 210px) 92px minmax(80px, 1fr) 46px 92px 52px;
+  grid-template-columns: minmax(150px, 210px) 92px minmax(80px, 1fr) 46px 92px auto;
   gap: 14px; align-items: center;
 }
+.item-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.item-acts .step-btn { min-width: 34px; padding: 0 8px; }
 .item-row .name { font-size: 13px; font-weight: 500; }
 .item-row .name small { display: block; font-size: 11px; color: var(--muted-2); font-weight: 400; }
 .item-row .qty { font-family: var(--mono); font-size: 12px; color: var(--muted); }
@@ -657,10 +680,10 @@ select.input { appearance: none; padding-right: 34px;
   .nav { display: none; }
   .topbar { padding: 0 16px; }
   .page { padding: 20px 16px 40px; }
-  .item-row { grid-template-columns: minmax(0, 1fr) 82px 52px; grid-template-areas: "name qty btn" "bar bar bar"; row-gap: 9px; }
+  .item-row { grid-template-columns: minmax(0, 1fr) 72px auto; grid-template-areas: "name qty btn" "bar bar bar"; row-gap: 9px; }
   .item-row .name { grid-area: name; }
   .item-row .qty { grid-area: qty; text-align: right; }
-  .item-row .step-btn { grid-area: btn; }
+  .item-row .item-acts { grid-area: btn; }
   .item-row .pips { grid-area: bar; }
   .item-row .pct, .item-row .status-text { display: none; }
   .user-chip .who { display: none; }
@@ -733,7 +756,19 @@ select.input { appearance: none; padding-right: 34px;
   <div id="view"></div>
 </div>
 
+<!-- Библиотека Supabase. Если основной адрес недоступен (бывает у провайдеров
+     и в некоторых браузерах), подставляем запасной. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+if (!window.supabase) {
+  document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+}
+</script>
+<script>
+if (!window.supabase) {
+  document.write('<script src="https://esm.sh/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+}
+</script>
 
 <!-- Файл настроек. Лежит рядом с index.html. Если его нет — сайт работает
      на значениях по умолчанию, ничего не ломается. -->
@@ -741,7 +776,7 @@ select.input { appearance: none; padding-right: 34px;
      подсовывают старую копию файла ещё часами после заливки новой. -->
 <script>
   document.write('<script src="config.js?v=' + Date.now() +
-    '" onerror="console.info(\'config.js не найден — работают значения по умолчанию\')"><\/script>');
+    '" onerror="window.LC_CONFIG_MISSING = true"><\/script>');
 </script>
 
 <script>
@@ -897,13 +932,11 @@ select.input { appearance: none; padding-right: 34px;
   window.LC_HAS_FILE = Object.keys(fromFile).length > 0;
 
   /* Адрес базы — только из config.js.
-     Раньше настройки из панели лежали в localStorage и перебивали файл: сменишь
-     проект в config.js, а браузер продавца молча ходит в старую (уже удалённую)
-     базу — вход не работает, а в режиме инкогнито всё хорошо. Теперь, если в
-     config.js база указана, она главнее любых локальных правок. Панель по-прежнему
-     задаёт базу, пока файла нет, — так работает первичная настройка. */
+     Иначе настройки из панели (localStorage) перебивают файл: сменишь проект
+     в config.js, а браузер молча ходит в старую базу. Если в config.js база
+     указана, она главнее любых локальных правок. */
   if (window.LC_FILE.supabaseUrl && window.LC_FILE.supabaseAnonKey) {
-    window.LC_CONFIG.supabaseUrl    = window.LC_FILE.supabaseUrl;
+    window.LC_CONFIG.supabaseUrl     = window.LC_FILE.supabaseUrl;
     window.LC_CONFIG.supabaseAnonKey = window.LC_FILE.supabaseAnonKey;
     window.LC_CONFIG.emailDomain     = window.LC_FILE.emailDomain || window.LC_CONFIG.emailDomain;
   }
@@ -944,6 +977,152 @@ select.input { appearance: none; padding-right: 34px;
     sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
       auth: { persistSession: true, autoRefreshToken: true }
     });
+  }
+
+  /* ---------------- страховка от рассинхрона схемы ----------------
+     Если в базе Supabase ещё нет какой-то из новых колонок (не прогнали
+     свежий schema.sql либо PostgREST держит старый кеш схемы), запись
+     падала бы с «Could not find the 'X' column». Вместо падения выкидываем
+     эту колонку и пробуем снова: данные сохранятся, просто без нового поля.
+     Об этом один раз говорим в консоль. */
+
+  const missingCols = {};
+
+  /** Некоторые браузеры и расширения урезают console — пишем осторожно. */
+  function say(text) {
+    try {
+      const c = window.console;
+      if (c && typeof c.warn === 'function') c.warn(text);
+      else if (c && typeof c.log === 'function') c.log(text);
+    } catch (e) { /* и без записи проживём */ }
+  }
+
+  function noteMissing(table, col) {
+    const key = table + '.' + col;
+    if (missingCols[key]) return;
+    missingCols[key] = true;
+    say('Lube Control: в базе нет колонки ' + key +
+      '. Выполните свежий schema.sql в Supabase → SQL Editor, затем: notify pgrst, \'reload schema\';');
+  }
+
+  /**
+   * База отказала по правам (Row Level Security). Почти всегда причина одна:
+   * у вошедшего пользователя нет строки в таблице profiles, поэтому база
+   * не знает ни его роли, ни закреплённого стеллажа.
+   */
+  const isRls = (error) =>
+    !!error && (error.code === '42501' || /row-level security/i.test(error.message || ''));
+
+  function rlsError(table) {
+    return new Error('База отказала в записи в «' + table + '»: у вашего пользователя нет профиля ' +
+      'или роли. Выполните fix-profiles.sql в Supabase → SQL Editor — он пропишет роли ' +
+      'для уже заведённых пользователей.');
+  }
+
+  const missingColName = (error) => {
+    const m = /Could not find the '([^']+)' column/.exec((error && error.message) || '');
+    return m ? m[1] : null;
+  };
+
+  const missingTable = (error) =>
+    !!error && (error.code === 'PGRST205' || error.code === '42P01' ||
+      /Could not find the table|relation .* does not exist/i.test(error.message || ''));
+
+  /** insert с отбрасыванием колонок, которых нет в базе. */
+  async function sbInsert(table, row, wantRow) {
+    const data = Object.assign({}, row);
+    for (let i = 0; i < 12; i++) {
+      const q = sb.from(table).insert(data);
+      const res = wantRow ? await q.select().single() : await q;
+      if (!res.error) return res.data || data;
+      const col = missingColName(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
+        noteMissing(table, col);
+        delete data[col];
+        continue;
+      }
+      if (missingTable(res.error)) {
+        noteMissing(table, '*');
+        throw new Error('В базе нет таблицы «' + table +
+          '». Выполните свежий schema.sql в Supabase → SQL Editor.');
+      }
+      if (isRls(res.error)) throw rlsError(table);
+      throw res.error;
+    }
+    throw new Error('Не удалось записать в ' + table);
+  }
+
+  /** Чтение таблицы, которой может не быть в старой базе: тогда просто пусто. */
+  async function sbSelect(table, build) {
+    const res = await build(sb.from(table).select('*'));
+    if (!res.error) return res.data || [];
+    if (missingTable(res.error)) {
+      noteMissing(table, '*');
+      return [];
+    }
+    if (isRls(res.error)) throw rlsError(table);
+    throw res.error;
+  }
+
+  /** update с той же страховкой. build(query) навешивает .eq(...) и прочее. */
+  async function sbUpdate(table, patch, build) {
+    const data = Object.assign({}, patch);
+    for (let i = 0; i < 12; i++) {
+      const res = await build(sb.from(table).update(data));
+      if (!res.error) return data;
+      const col = missingColName(res.error);
+      if (col && Object.prototype.hasOwnProperty.call(data, col)) {
+        noteMissing(table, col);
+        delete data[col];
+        if (!Object.keys(data).length) return data;
+        continue;
+      }
+      if (isRls(res.error)) throw rlsError(table);
+      throw res.error;
+    }
+    throw new Error('Не удалось обновить ' + table);
+  }
+
+  /**
+   * Пакетная запись (insert или upsert) кусками по 200 строк —
+   * для загрузки прайса и закупок из файла. Незнакомые базе колонки
+   * выкидываются так же, как в sbInsert.
+   */
+  async function sbWriteMany(table, rows, upsert) {
+    let data = rows.map(r => Object.assign({}, r));
+    for (let start = 0; start < data.length; start += 200) {
+      for (let i = 0; i < 12; i++) {
+        const chunk = data.slice(start, start + 200);
+        const q = sb.from(table);
+        const res = upsert ? await q.upsert(chunk) : await q.insert(chunk);
+        if (!res.error) break;
+        const col = missingColName(res.error);
+        if (col) {
+          noteMissing(table, col);
+          data.forEach(r => { delete r[col]; });
+          continue;
+        }
+        if (missingTable(res.error)) {
+          throw new Error('В базе нет таблицы «' + table + '». Выполните свежий schema.sql в Supabase → SQL Editor.');
+        }
+        if (isRls(res.error)) throw rlsError(table);
+        throw res.error;
+      }
+    }
+    return data;
+  }
+
+  /**
+   * Раньше кнопка «−1» у администратора писала в журнал ПРОДАЖУ с пометкой
+   * «списано администратором». Это не продажа: такие записи показываем
+   * как «Списание», в выручку и маржу они не попадают.
+   * (В базе их навсегда исправляет fix-v5.sql.)
+   */
+  function normalizeOp(o) {
+    if (o && o.type === 'sale' && /списано администратором/i.test(o.note || '')) {
+      return Object.assign({}, o, { type: 'writeoff', amount: (o.qty || 0) * (Number(o.cost) || 0), margin: 0 });
+    }
+    return o;
   }
 
   const listeners = [];
@@ -1034,9 +1213,7 @@ select.input { appearance: none; padding-right: 34px;
       return readLocal().catalog.slice()
         .sort((a, b) => (a.name + a.brand).localeCompare(b.name + b.brand));
     }
-    const { data, error } = await sb.from('catalog').select('*').order('name');
-    if (error) throw error;
-    return data || [];
+    return await sbSelect('catalog', q => q.order('name'));
   }
 
   async function addCatalogItem(data, user) {
@@ -1069,8 +1246,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('catalog').insert(row);
-    if (error) throw error;
+    await sbInsert('catalog', row);
     await logOp({ type: 'price_add', item_name: row.name, brand: row.brand, sku: row.sku,
       note: [row.brand, row.volume].filter(Boolean).join(' · '),
       user_login: user.login, user_name: user.name });
@@ -1100,13 +1276,11 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return c;
     }
-    const { error } = await sb.from('catalog').update(patch).eq('id', id);
-    if (error) throw error;
-    const { error: e2 } = await sb.from('items').update({
+    await sbUpdate('catalog', patch, q => q.eq('id', id));
+    await sbUpdate('items', {
       name: patch.name, brand: patch.brand, volume: patch.volume, sku: patch.sku,
       category: patch.category, price: patch.price, cost: patch.cost
-    }).eq('catalog_id', id);
-    if (e2) throw e2;
+    }, q => q.eq('catalog_id', id));
     await logOp({ type: 'price_edit', item_name: patch.name, brand: patch.brand, sku: patch.sku,
       note: 'закупка ' + patch.cost + ' / продажа ' + patch.price,
       user_login: user.login, user_name: user.name });
@@ -1126,8 +1300,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return c;
     }
-    const { error } = await sb.from('catalog').update({ archived: !!archived }).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('catalog', { archived: !!archived }, q => q.eq('id', id));
     await logOp({ type: archived ? 'price_archive' : 'price_restore', item_name: '',
       user_login: user.login, user_name: user.name, note: id });
   }
@@ -1164,10 +1337,8 @@ select.input { appearance: none; padding-right: 34px;
         .sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
           String(b.created_at).localeCompare(String(a.created_at)));
     }
-    const { data, error } = await sb.from('purchases').select('*')
-      .order('date', { ascending: false }).order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    return await sbSelect('purchases',
+      q => q.order('date', { ascending: false }).order('created_at', { ascending: false }));
   }
 
   function purchaseRow(data, cat, user) {
@@ -1210,8 +1381,7 @@ select.input { appearance: none; padding-right: 34px;
       st.purchases.unshift(row);
       writeLocal(st);
     } else {
-      const { error } = await sb.from('purchases').insert(row);
-      if (error) throw error;
+      await sbInsert('purchases', row);
     }
 
     await logOp({
@@ -1251,8 +1421,7 @@ select.input { appearance: none; padding-right: 34px;
     const { data: rows, error: e0 } = await sb.from('purchases').select('*').eq('id', id).single();
     if (e0) throw e0;
     const row = purchaseRow(Object.assign({}, data, { id: id, created_at: rows.created_at }), cat, user);
-    const { error } = await sb.from('purchases').update(row).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('purchases', row, q => q.eq('id', id));
     return row;
   }
 
@@ -1315,7 +1484,7 @@ select.input { appearance: none; padding-right: 34px;
       if (o.rack) rows = rows.filter(r => r.rack_code === o.rack);
       if (o.since) rows = rows.filter(r => r.created_at >= o.since);
       rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      return o.limit ? rows.slice(0, o.limit) : rows;
+      return (o.limit ? rows.slice(0, o.limit) : rows).map(normalizeOp);
     }
     let q = sb.from('ops').select('*').order('created_at', { ascending: false });
     if (o.rack) q = q.eq('rack_code', o.rack);
@@ -1323,7 +1492,7 @@ select.input { appearance: none; padding-right: 34px;
     if (o.limit) q = q.limit(o.limit);
     const { data, error } = await q;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(normalizeOp);
   }
 
   /** activeOnly — только незакрытые: ждут отгрузки или уже собраны. */
@@ -1344,7 +1513,20 @@ select.input { appearance: none; padding-right: 34px;
   /* ---------------- запись ---------------- */
 
   async function logOp(op) {
-    const row = {
+    const row = buildOp(op);
+    if (!cloud) {
+      const st = readLocal();
+      st.ops.unshift(row);
+      st.ops = st.ops.slice(0, 2000);
+      writeLocal(st);
+      return row;
+    }
+    return await sbInsert('ops', row, true);
+  }
+
+  /** Строка журнала движений (без записи). */
+  function buildOp(op) {
+    return {
       id: uid(),
       rack_code: op.rack_code || '',
       item_id: op.item_id || null,
@@ -1363,18 +1545,8 @@ select.input { appearance: none; padding-right: 34px;
       user_name: op.user_name || '',
       note: op.note || '',
       cancelled: false,
-      created_at: new Date().toISOString()
+      created_at: op.created_at || new Date().toISOString()
     };
-    if (!cloud) {
-      const st = readLocal();
-      st.ops.unshift(row);
-      st.ops = st.ops.slice(0, 2000);
-      writeLocal(st);
-      return row;
-    }
-    const { data, error } = await sb.from('ops').insert(row).select().single();
-    if (error) throw error;
-    return data;
   }
 
   /** Меняет остаток позиции на delta и пишет операцию в журнал. */
@@ -1398,8 +1570,7 @@ select.input { appearance: none; padding-right: 34px;
     const next = Math.max(0, Math.min(item.max, item.qty + delta));
     if (next === item.qty) throw new Error(delta < 0 ? 'Позиция уже пустая' : 'Больше не влезет — стеллаж полный');
     const applied = next - item.qty;
-    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
-    if (e2) throw e2;
+    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
     await logOp(opRow(item, applied, op, next));
     return { item: { ...item, qty: next }, applied };
   }
@@ -1446,8 +1617,7 @@ select.input { appearance: none; padding-right: 34px;
     if (e1) throw e1;
     const next = Math.max(0, Math.min(item.max, Math.round(value)));
     const diff = next - item.qty;
-    const { error: e2 } = await sb.from('items').update({ qty: next }).eq('id', itemId);
-    if (e2) throw e2;
+    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
     if (diff !== 0) {
       await logOp({
         ...op, item_id: item.id, item_name: item.name, brand: item.brand, sku: item.sku,
@@ -1499,9 +1669,8 @@ select.input { appearance: none; padding-right: 34px;
       writeLocal(st);
       return;
     }
-    const { error } = await sb.from('requests').update({ status: 'done' })
-      .eq('rack_code', rackCode).neq('status', 'done');
-    if (error) throw error;
+    await sbUpdate('requests', { status: 'done' },
+      q => q.eq('rack_code', rackCode).neq('status', 'done'));
   }
 
   async function createRequest(rackCode, note, user) {
@@ -1519,8 +1688,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('requests').insert(row);
-    if (error) throw error;
+    await sbInsert('requests', row);
     await logOp({ rack_code: rackCode, type: 'request', note: note, user_login: user.login, user_name: user.name });
     return row;
   }
@@ -1542,9 +1710,7 @@ select.input { appearance: none; padding-right: 34px;
       if (n) { writeLocal(st); localChanged(); }
       return n;
     }
-    const { error } = await sb.from('requests').update({ seen_at: now })
-      .in('id', list).is('seen_at', null);
-    if (error) throw error;
+    await sbUpdate('requests', { seen_at: now }, q => q.in('id', list).is('seen_at', null));
     return list.length;
   }
 
@@ -1587,14 +1753,12 @@ select.input { appearance: none; padding-right: 34px;
         created_by: user.login, created_by_name: user.name,
         seen_at: now, packed_at: null, packed_by: '', created_at: now
       };
-      const { error } = await sb.from('requests').insert(req);
-      if (error) throw error;
+      await sbInsert('requests', req);
     }
     if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
-    const { error: e1 } = await sb.from('requests').update({
+    await sbUpdate('requests', {
       status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name
-    }).eq('id', req.id);
-    if (e1) throw e1;
+    }, q => q.eq('id', req.id));
     await logOp({ rack_code: rackCode, type: 'packed', note: note || 'поставка собрана',
       user_login: user.login, user_name: user.name });
     return req;
@@ -1609,8 +1773,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return;
     }
-    const { error } = await sb.from('requests').update({ status: 'done' }).eq('id', id);
-    if (error) throw error;
+    await sbUpdate('requests', { status: 'done' }, q => q.eq('id', id));
   }
 
   async function addRack(data, user) {
@@ -1628,8 +1791,8 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return row;
     }
-    const { error } = await sb.from('racks').insert(row);
-    if (error) throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error);
+    try { await sbInsert('racks', row); }
+    catch (error) { throw (error.code === '23505' ? new Error('Стеллаж с таким кодом уже есть') : error); }
     await logOp({ rack_code: row.code, type: 'rack_add', user_login: user.login, user_name: user.name, note: row.station });
     return row;
   }
@@ -1660,8 +1823,7 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return r;
     }
-    const { error } = await sb.from('racks').update(patch).eq('code', code);
-    if (error) throw error;
+    await sbUpdate('racks', patch, q => q.eq('code', code));
     await logOp({ rack_code: code, type: 'rack_edit', user_login: user.login, user_name: user.name,
       note: patch.station || (data.photo !== undefined ? 'фото обновлено' : 'правка карточки') });
     return patch;
@@ -1698,8 +1860,7 @@ select.input { appearance: none; padding-right: 34px;
       .eq('rack_code', rackCode).eq('catalog_id', cat.id);
     if (e0) throw e0;
     if (exist && exist.length) throw new Error('Эта позиция уже стоит на стеллаже');
-    const { error } = await sb.from('items').insert(row);
-    if (error) throw error;
+    await sbInsert('items', row);
     await logOp({ rack_code: rackCode, item_id: row.id, catalog_id: cat.id, item_name: row.name, brand: row.brand,
       sku: row.sku, type: 'item_add', qty: row.qty, qty_after: row.qty,
       cost: row.cost, price: row.price, amount: row.qty * row.cost,
@@ -1715,17 +1876,29 @@ select.input { appearance: none; padding-right: 34px;
       if (!it) throw new Error('Позиция не найдена');
       st.items = st.items.filter(i => i.id !== itemId);
       writeLocal(st);
-      await logOp({ rack_code: it.rack_code, item_name: it.name, brand: it.brand, sku: it.sku,
-        type: 'item_remove', qty: it.qty, user_login: user.login, user_name: user.name });
+      await logOp({ rack_code: it.rack_code, item_id: it.id, catalog_id: it.catalog_id || null,
+        item_name: it.name, brand: it.brand, sku: it.sku,
+        type: 'item_remove', qty: it.qty, qty_after: 0, cost: it.cost || 0, price: it.price || 0,
+        amount: it.qty * (it.cost || 0), user_login: user.login, user_name: user.name,
+        note: it.qty ? 'остаток ' + it.qty + ' шт вернулся на склад' : '' });
       localChanged();
       return it;
     }
     const { data: it, error: e1 } = await sb.from('items').select('*').eq('id', itemId).single();
     if (e1) throw e1;
-    const { error } = await sb.from('items').delete().eq('id', itemId);
-    if (error) throw error;
-    await logOp({ rack_code: it.rack_code, item_name: it.name, brand: it.brand, sku: it.sku,
-      type: 'item_remove', qty: it.qty, user_login: user.login, user_name: user.name });
+    // .select() возвращает удалённые строки: если база молча ничего не удалила
+    // (нет прав), мы это увидим, а не покажем ложное «готово».
+    const { data: gone, error } = await sb.from('items').delete().eq('id', itemId).select('id');
+    if (error) throw (isRls(error) ? rlsError('items') : error);
+    if (!gone || !gone.length) {
+      throw new Error('База не дала снять позицию. Похоже, у вашей учётки нет роли администратора — ' +
+        'выполните fix-v5.sql в Supabase → SQL Editor.');
+    }
+    await logOp({ rack_code: it.rack_code, item_id: it.id, catalog_id: it.catalog_id || null,
+      item_name: it.name, brand: it.brand, sku: it.sku,
+      type: 'item_remove', qty: it.qty, qty_after: 0, cost: it.cost || 0, price: it.price || 0,
+      amount: it.qty * (it.cost || 0), user_login: user.login, user_name: user.name,
+      note: it.qty ? 'остаток ' + it.qty + ' шт вернулся на склад' : '' });
     return it;
   }
 
@@ -1748,8 +1921,7 @@ select.input { appearance: none; padding-right: 34px;
     const { data: it, error: e1 } = await sb.from('items').select('*').eq('id', itemId).single();
     if (e1) throw e1;
     const qty = Math.min(it.qty, value);
-    const { error } = await sb.from('items').update({ max: value, qty }).eq('id', itemId);
-    if (error) throw error;
+    await sbUpdate('items', { max: value, qty }, q => q.eq('id', itemId));
     await logOp({ rack_code: it.rack_code, item_id: it.id, item_name: it.name, brand: it.brand,
       type: 'item_max', qty_after: qty, user_login: user.login, user_name: user.name,
       note: 'вместимость ' + value });
@@ -1778,8 +1950,326 @@ select.input { appearance: none; padding-right: 34px;
       localChanged();
       return;
     }
-    const { error } = await sb.from('ops').update({ cancelled: true }).eq('id', opId);
+    await sbUpdate('ops', { cancelled: true }, q => q.eq('id', opId));
+  }
+
+  /* ---------------- ручная правка позиции администратором ----------------
+     Администратор стоит у стеллажа и приводит полку в порядок:
+     добавил штуку, снял штуку, поменял вместимость. Каждое действие
+     пишется своим типом — НЕ продажей:
+       restock  — поставил со склада (+)
+       unload   — снял и увёз на склад (−, склад прибавляется)
+       writeoff — списание: брак, протечка, потеря (−)
+       audit    — сверка: просто привёл цифру к факту (±)
+       sale     — продажа (−), только если админ действительно продал сам */
+
+  const ADJUST_UP = ['restock', 'audit'];
+  const ADJUST_DOWN = ['unload', 'writeoff', 'audit', 'sale'];
+
+  async function getItemRow(itemId) {
+    if (!cloud) {
+      const it = readLocal().items.find(i => i.id === itemId);
+      if (!it) throw new Error('Позиция не найдена');
+      return it;
+    }
+    const { data, error } = await sb.from('items').select('*').eq('id', itemId).single();
     if (error) throw error;
+    return data;
+  }
+
+  /** data: { qty, max, reason, note }. Возвращает { delta, reason }. */
+  async function adjustItem(itemId, data, user) {
+    const item = await getItemRow(itemId);
+    let max = item.max;
+    if (data.max !== undefined && Math.max(1, Number(data.max) || 1) !== item.max) {
+      await setMax(itemId, data.max, user);
+      max = Math.max(1, Number(data.max) || 1);
+    }
+    const cur = Math.min(item.qty, max);
+    const next = Math.max(0, Math.min(max, Math.round(Number(data.qty))));
+    if (isNaN(next)) throw new Error('Укажите количество');
+    const delta = next - cur;
+    if (!delta) { if (!cloud) localChanged(); return { delta: 0, reason: null }; }
+
+    const reason = data.reason || (delta > 0 ? 'restock' : 'unload');
+    if ((delta > 0 ? ADJUST_UP : ADJUST_DOWN).indexOf(reason) < 0) throw new Error('Выберите, что произошло с товаром');
+    const base = { user_login: user.login, user_name: user.name, note: data.note || '', silent: true };
+
+    if (reason === 'audit') {
+      await setQty(itemId, next, Object.assign({}, base, { type: 'audit', note: data.note || 'сверка администратором' }));
+    } else {
+      await changeQty(itemId, delta, Object.assign({}, base, { type: reason }));
+    }
+    if (!cloud) localChanged();
+    return { delta, reason };
+  }
+
+  /* ---------------- загрузка прайса из файла ----------------
+     plan = { add: [ {category,name,brand,volume,sku,cost,price, id?} ],
+              update: [ { id, patch: {cost, price, ...} } ], file }  */
+
+  async function importCatalog(plan, user) {
+    const now = Date.now();
+    const add = (plan.add || []).map((d, i) => ({
+      id: d.id || uid(),
+      category: d.category || 'other',
+      name: String(d.name || '').trim(),
+      brand: String(d.brand || '').trim(),
+      volume: String(d.volume || '').trim(),
+      sku: String(d.sku || '').trim(),
+      cost: Number(d.cost) || 0,
+      price: Number(d.price) || 0,
+      archived: false,
+      created_at: new Date(now + i).toISOString()
+    })).filter(r => r.name);
+
+    const catalog = await getCatalog();
+    const byId = {};
+    catalog.forEach(c => { byId[c.id] = c; });
+    const upd = (plan.update || [])
+      .filter(u => byId[u.id])
+      .map(u => Object.assign({}, byId[u.id], u.patch));
+
+    if (!add.length && !upd.length) throw new Error('Загружать нечего — всё уже есть в прайсе с теми же ценами');
+
+    if (!cloud) {
+      const st = readLocal();
+      add.forEach(r => st.catalog.push(r));
+      upd.forEach(r => {
+        const c = st.catalog.find(x => x.id === r.id);
+        if (!c) return;
+        Object.assign(c, r);
+        st.items.forEach(i => { if (i.catalog_id === c.id) Object.assign(i, fromCatalog(c)); });
+      });
+      writeLocal(st);
+    } else {
+      if (add.length) await sbWriteMany('catalog', add);
+      if (upd.length) {
+        await sbWriteMany('catalog', upd, true);
+        const { data: onRacks } = await sb.from('items').select('id,catalog_id');
+        const used = new Set((onRacks || []).map(i => i.catalog_id));
+        for (const r of upd) {
+          if (!used.has(r.id)) continue;
+          const f = fromCatalog(r);
+          delete f.catalog_id;
+          await sbUpdate('items', f, q => q.eq('catalog_id', r.id));
+        }
+      }
+    }
+
+    if (!plan.silent) {
+      await logOp({ type: 'price_import', user_login: user.login, user_name: user.name,
+        qty: add.length + upd.length,
+        note: 'добавлено ' + add.length + ', обновлено ' + upd.length + (plan.file ? ' · ' + plan.file : '') });
+    }
+    if (!cloud && !plan.silent) localChanged();
+    return { added: add.length, updated: upd.length };
+  }
+
+  /* ---------------- загрузка целой закупки из файла ----------------
+     lines = [ { catalog_id | newCat:{...}, qty, cost, price?, supplier?, payment?, date? } ]
+     meta  = { date, supplier, payment, updateCost, updatePrice, file }  */
+
+  async function importPurchases(lines, meta, user) {
+    const list = (lines || []).filter(l => Number(l.qty) > 0);
+    if (!list.length) throw new Error('В файле нет строк с количеством больше нуля');
+
+    // 1. Новые позиции прайса (если в прайсе такого товара не было)
+    const toAdd = [];
+    list.forEach(l => {
+      if (l.catalog_id || !l.newCat) return;
+      if (!l.newCat.id) {
+        l.newCat.id = uid();
+        toAdd.push(l.newCat);
+      }
+      l.catalog_id = l.newCat.id;
+    });
+
+    // 2. Свежие цены в прайс
+    const catalogBefore = await getCatalog();
+    const byId = {};
+    catalogBefore.forEach(c => { byId[c.id] = c; });
+    const updMap = {};
+    list.forEach(l => {
+      const c = byId[l.catalog_id];
+      if (!c) return;
+      const patch = {};
+      if (meta.updateCost && Number(l.cost) > 0 && Number(l.cost) !== Number(c.cost)) patch.cost = Number(l.cost);
+      if (meta.updatePrice && Number(l.price) > 0 && Number(l.price) !== Number(c.price)) patch.price = Number(l.price);
+      if (Object.keys(patch).length) updMap[c.id] = Object.assign(updMap[c.id] || {}, patch);
+    });
+    const update = Object.keys(updMap).map(id => ({ id, patch: updMap[id] }));
+    let created = 0, updated = 0;
+    if (toAdd.length || update.length) {
+      const r = await importCatalog({ add: toAdd, update, silent: true }, user);
+      created = r.added; updated = r.updated;
+    }
+
+    // 3. Строки закупки и движения
+    const catalog = await getCatalog();
+    const cat = {};
+    catalog.forEach(c => { cat[c.id] = c; });
+    const t0 = Date.now();
+    const purchases = [], ops = [];
+    list.forEach((l, i) => {
+      const c = cat[l.catalog_id];
+      if (!c) return;
+      const row = purchaseRow({
+        date: l.date || meta.date,
+        supplier: l.supplier || meta.supplier,
+        payment: l.payment || meta.payment,
+        note: meta.file ? 'из файла ' + meta.file : '',
+        cost: Number(l.cost) > 0 ? l.cost : c.cost,
+        qty: l.qty,
+        created_at: new Date(t0 + i).toISOString()
+      }, c, user);
+      purchases.push(row);
+      ops.push(buildOp({
+        type: 'purchase', rack_code: '', catalog_id: c.id,
+        item_name: row.name, brand: row.brand, sku: row.sku,
+        qty: row.qty, cost: row.cost, price: Number(c.price) || 0, amount: row.amount,
+        user_login: user.login, user_name: user.name,
+        note: [row.supplier, row.payment].filter(Boolean).join(' · '),
+        created_at: row.created_at
+      }));
+    });
+    if (!purchases.length) throw new Error('Не удалось сопоставить ни одной строки с прайсом');
+
+    if (!cloud) {
+      const st = readLocal();
+      st.purchases = purchases.slice().reverse().concat(st.purchases);
+      st.ops = ops.slice().reverse().concat(st.ops).slice(0, 2000);
+      writeLocal(st);
+      localChanged();
+    } else {
+      await sbWriteMany('purchases', purchases);
+      await sbWriteMany('ops', ops);
+    }
+    return {
+      lines: purchases.length,
+      qty: purchases.reduce((s, p) => s + p.qty, 0),
+      sum: purchases.reduce((s, p) => s + p.amount, 0),
+      created, updated
+    };
+  }
+
+  /* ---------------- сотрудники (учётные записи) ----------------
+     В общей базе — через функции admin_* из fix-v5.sql: они проверяют,
+     что вызывает администратор, и заводят пользователя сразу подтверждённым.
+     В демо-режиме — список в этом браузере поверх аккаунтов из config.js. */
+
+  const ACC_KEY = 'lc_accounts_v1';
+  function readAccounts() {
+    try { return JSON.parse(localStorage.getItem(ACC_KEY)) || []; } catch (e) { return []; }
+  }
+  function writeAccounts(list) {
+    try { localStorage.setItem(ACC_KEY, JSON.stringify(list)); } catch (e) { /* приватный режим */ }
+  }
+  /** Аккаунты демо-режима: config.js + заведённые на сайте. */
+  function localAccounts() {
+    const map = {};
+    (CFG.accounts || []).forEach(a => { map[a.login.toLowerCase()] = Object.assign({}, a); });
+    readAccounts().forEach(a => {
+      const k = a.login.toLowerCase();
+      if (a.deleted) delete map[k];
+      else map[k] = Object.assign({}, map[k] || {}, a);
+    });
+    return Object.keys(map).map(k => map[k]);
+  }
+  function patchLocalAccount(login, patch) {
+    const l = login.toLowerCase();
+    const list = readAccounts().filter(a => a.login.toLowerCase() !== l);
+    const was = localAccounts().find(a => a.login.toLowerCase() === l) || { login: l };
+    list.push(Object.assign({}, was, patch));
+    writeAccounts(list);
+  }
+
+  function rpcError(error) {
+    if (error.code === 'PGRST202' || /could not find the function/i.test(error.message || '')) {
+      return new Error('В базе ещё нет функций для учётных записей. Выполните fix-v5.sql в Supabase → SQL Editor.');
+    }
+    return new Error(error.message || 'Ошибка базы');
+  }
+  async function rpc(name, args) {
+    const { data, error } = await sb.rpc(name, args || {});
+    if (error) throw rpcError(error);
+    return data;
+  }
+
+  function checkLogin(login) {
+    const l = String(login || '').trim().toLowerCase();
+    if (!/^[a-z0-9._-]{2,32}$/.test(l)) throw new Error('Логин — латинские буквы, цифры, точка или дефис, от 2 до 32 знаков');
+    return l;
+  }
+  function checkPassword(pw) {
+    if (String(pw || '').length < 6) throw new Error('Пароль — не короче 6 знаков');
+    return String(pw);
+  }
+
+  async function listUsers() {
+    if (!cloud) {
+      return localAccounts().map(a => ({
+        login: a.login, name: a.name, title: a.title || '', role: a.role,
+        rack_code: a.rack || null, created_at: null, last_sign_in_at: null
+      }));
+    }
+    return (await rpc('admin_list_users')) || [];
+  }
+
+  async function createUser(d, user) {
+    const login = checkLogin(d.login);
+    const password = checkPassword(d.password);
+    const name = String(d.name || '').trim();
+    if (!name) throw new Error('Укажите имя сотрудника');
+    const role = d.role === 'admin' ? 'admin' : 'seller';
+    const rack = role === 'seller' ? (d.rack || null) : null;
+    const title = String(d.title || '').trim() || (role === 'admin' ? 'Администратор' : 'Продавец');
+
+    if (!cloud) {
+      if (localAccounts().some(a => a.login.toLowerCase() === login)) throw new Error('Логин «' + login + '» уже занят');
+      patchLocalAccount(login, { login, password, role, name, title, rack, deleted: false });
+    } else {
+      await rpc('admin_create_user', {
+        p_login: login, p_password: password, p_name: name, p_role: role, p_rack: rack, p_title: title
+      });
+    }
+    await logOp({ type: 'user_add', user_login: user.login, user_name: user.name,
+      note: login + ' · ' + name + (rack ? ' · ' + rack : '') });
+    if (!cloud) localChanged();
+    return { login, password };
+  }
+
+  async function updateUser(login, d, user) {
+    const role = d.role === 'admin' ? 'admin' : 'seller';
+    const name = String(d.name || '').trim();
+    if (!name) throw new Error('Укажите имя сотрудника');
+    if (login === user.login && role !== 'admin') throw new Error('Себе роль администратора снять нельзя');
+    const rack = role === 'seller' ? (d.rack || null) : null;
+    const title = String(d.title || '').trim() || (role === 'admin' ? 'Администратор' : 'Продавец');
+    if (!cloud) patchLocalAccount(login, { role, name, title, rack });
+    else await rpc('admin_update_user', { p_login: login, p_name: name, p_title: title, p_role: role, p_rack: rack });
+    await logOp({ type: 'user_edit', user_login: user.login, user_name: user.name,
+      note: login + ' · ' + name + (rack ? ' · ' + rack : '') });
+    if (!cloud) localChanged();
+    return true;
+  }
+
+  async function setPassword(login, password, user) {
+    const pw = checkPassword(password);
+    if (!cloud) patchLocalAccount(login, { password: pw });
+    else await rpc('admin_set_password', { p_login: login, p_password: pw });
+    await logOp({ type: 'user_password', user_login: user.login, user_name: user.name, note: login });
+    if (!cloud) localChanged();
+    return true;
+  }
+
+  async function deleteUser(login, user) {
+    if (login === user.login) throw new Error('Свою учётную запись удалить нельзя');
+    if (!cloud) patchLocalAccount(login, { deleted: true });
+    else await rpc('admin_delete_user', { p_login: login });
+    await logOp({ type: 'user_delete', user_login: user.login, user_name: user.name, note: login });
+    if (!cloud) localChanged();
+    return true;
   }
 
   /* ---------------- подписка на изменения ---------------- */
@@ -1826,6 +2316,10 @@ select.input { appearance: none; padding-right: 34px;
       if (o.type === 'restock' || o.type === 'delivery' || o.type === 'item_add') {
         left[o.catalog_id] = (left[o.catalog_id] || 0) - (Number(o.qty) || 0);
       }
+      // снятое со стеллажа возвращается на склад
+      if (o.type === 'unload' || o.type === 'item_remove') {
+        left[o.catalog_id] = (left[o.catalog_id] || 0) + (Number(o.qty) || 0);
+      }
     });
     return left;
   }
@@ -1839,6 +2333,8 @@ select.input { appearance: none; padding-right: 34px;
     changeQty, setQty, restock, restockAll, logOp,
     createRequest, closeRequest, closeRequests, markRequestsSeen, markPacked,
     addRack, updateRack, addItem, removeItem, setMax, cancelOp,
+    adjustItem, importCatalog, importPurchases,
+    listUsers, createUser, updateUser, setPassword, deleteUser, localAccounts,
     onChange, clearAll, resetDemo: clearAll, uid
   };
 })();
@@ -1860,6 +2356,9 @@ select.input { appearance: none; padding-right: 34px;
     bell: '<path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"/><path d="M13.5 20a2 2 0 0 1-3 0"/>',
     warn: '<path d="M12 4.5 2.8 19.5h18.4L12 4.5Z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
     down: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/>',
+    up: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><path d="M16 5.2a3 3 0 0 1 0 5.6"/><path d="M18 14.2c1.6.6 2.7 2.2 3 4.8"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m15 8 2 2"/>',
     plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     minus: '<path d="M5 12h14"/>',
     truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
@@ -1944,6 +2443,8 @@ select.input { appearance: none; padding-right: 34px;
     restock:       { label: 'Пополнение',        sign: +1, color: '#3DDC84', group: 'move' },
     delivery:      { label: 'Приём поставки',    sign: +1, color: '#3DDC84', group: 'move' },
     cancel:        { label: 'Возврат на полку',  sign: +1, color: '#7C8CF8', group: 'move' },
+    unload:        { label: 'Снято на склад',    sign: -1, color: '#7C8CF8', group: 'move' },
+    writeoff:      { label: 'Списание',          sign: -1, color: '#FF5A5F', group: 'move' },
     audit:         { label: 'Сверка',            sign: 0,  color: '#8494AC', group: 'move' },
     purchase:      { label: 'Закупка',           sign: +1, color: '#7C8CF8', group: 'buy' },
     purchase_del:  { label: 'Закупка удалена',   sign: -1, color: '#FF5A5F', group: 'buy' },
@@ -1958,7 +2459,12 @@ select.input { appearance: none; padding-right: 34px;
     price_edit:    { label: 'Прайс: изменено',   sign: 0,  color: '#8494AC', group: 'price' },
     price_archive: { label: 'Прайс: в архив',    sign: 0,  color: '#8494AC', group: 'price' },
     price_restore: { label: 'Прайс: возвращено', sign: 0,  color: '#8494AC', group: 'price' },
-    price_delete:  { label: 'Прайс: удалено',    sign: 0,  color: '#FF5A5F', group: 'price' }
+    price_delete:  { label: 'Прайс: удалено',    sign: 0,  color: '#FF5A5F', group: 'price' },
+    price_import:  { label: 'Прайс: загружен файл', sign: 0, color: '#7C8CF8', group: 'price' },
+    user_add:      { label: 'Новый сотрудник',   sign: 0,  color: '#3DDC84', group: 'users' },
+    user_edit:     { label: 'Правка сотрудника', sign: 0,  color: '#8494AC', group: 'users' },
+    user_password: { label: 'Смена пароля',      sign: 0,  color: '#8494AC', group: 'users' },
+    user_delete:   { label: 'Сотрудник удалён',  sign: 0,  color: '#FF5A5F', group: 'users' }
   };
   const opInfo = (type) => OPS[type] || { label: type, sign: 0, color: '#8494AC', group: 'setup' };
 
@@ -2021,7 +2527,7 @@ select.input { appearance: none; padding-right: 34px;
       ).join('');
 
       back.innerHTML =
-        '<div class="modal' + (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true">' +
+        '<div class="modal' + (opts.wide ? ' wide' : '') + (opts.cls ? ' ' + opts.cls : '') + '" role="dialog" aria-modal="true">' +
           '<div class="modal-head">' +
             '<div><h3>' + esc(opts.title || '') + '</h3>' +
             (opts.subtitle ? '<p>' + esc(opts.subtitle) + '</p>' : '') + '</div>' +
@@ -2157,15 +2663,37 @@ select.input { appearance: none; padding-right: 34px;
     });
   }
 
-  function modeBanner() {
+  function modeBanner(user) {
     const host = document.querySelector('[data-mode-banner]');
     if (!host) return;
+
+    // ключи есть, а библиотека не загрузилась — молча уходить в демо нельзя
+    if (window.LC_STORE.mode === 'demo' && CFG.supabaseUrl && CFG.supabaseAnonKey) {
+      host.className = 'mode-banner err';
+      host.innerHTML = icon('warn', 14) +
+        '<span>Ключи базы прописаны, но библиотека Supabase не загрузилась — сайт работает ' +
+        'на данных этого браузера. Проверьте интернет, блокировщик рекламы или откройте сайт ' +
+        'в другом браузере.</span>';
+      return;
+    }
+
+    if (window.LC_STORE.mode === 'cloud' && user && user.noProfile) {
+      host.className = 'mode-banner err';
+      host.innerHTML = icon('warn', 14) +
+        '<span>Вы вошли, но в базе нет профиля этого пользователя — она не знает вашу роль ' +
+        'и не даст ничего записать. Выполните <b>fix-profiles.sql</b> в Supabase → SQL Editor.</span>';
+      return;
+    }
+
     if (window.LC_STORE.mode === 'demo') {
       host.className = 'mode-banner';
       host.innerHTML = icon('warn', 14) +
         '<span>Демо-режим: данные хранятся только в этом браузере и не видны другим устройствам. ' +
-        'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
-        '(или в разделе «Настройки»).</span>';
+        (window.LC_CONFIG_MISSING
+          ? 'Файла <b>config.js</b> рядом с index.html нет — положите его в корень репозитория, ' +
+            'туда же, где лежит index.html, и впишите в него ключи базы.'
+          : 'Чтобы включить общую базу, заполните supabaseUrl и supabaseAnonKey в файле config.js ' +
+            '(или в разделе «Настройки»).') + '</span>';
     } else {
       host.className = 'mode-banner cloud';
       host.innerHTML = icon('check', 14) + '<span>Общая база подключена — изменения видны всем сразу.</span>';
@@ -2322,8 +2850,10 @@ select.input { appearance: none; padding-right: 34px;
   const STORE = window.LC_STORE;
   const SESSION_KEY = 'lc_session_v1';
 
-  const findAccount = (login) =>
-    CFG.accounts.find(a => a.login.toLowerCase() === String(login || '').trim().toLowerCase()) || null;
+  const findAccount = (login) => {
+    const list = STORE.cloud ? (CFG.accounts || []) : STORE.localAccounts();
+    return list.find(a => a.login.toLowerCase() === String(login || '').trim().toLowerCase()) || null;
+  };
 
   const emailOf = (login) => login.toLowerCase() + '@' + CFG.emailDomain;
 
@@ -2352,6 +2882,19 @@ select.input { appearance: none; padding-right: 34px;
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* нет доступа */ }
   }
 
+  /**
+   * Не даём запросу к базе висеть вечно: если сети нет или ключи чужие,
+   * человек должен увидеть внятную надпись, а не крутящийся кружок.
+   */
+  function withTimeout(promise, ms, what) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error('База не ответила за ' + Math.round(ms / 1000) + ' с (' + what + '). ' +
+          'Проверьте supabaseUrl и ключ в config.js и доступ к сети.')), ms))
+    ]);
+  }
+
   /** Вход. Возвращает профиль пользователя либо бросает ошибку с понятным текстом. */
   async function signIn(login, password) {
     const acc = findAccount(login);
@@ -2363,23 +2906,33 @@ select.input { appearance: none; padding-right: 34px;
       return user;
     }
 
-    const { data, error } = await STORE.sb.auth.signInWithPassword({
+    const { data, error } = await withTimeout(STORE.sb.auth.signInWithPassword({
       email: emailOf(String(login || '').trim()),
       password: password
-    });
+    }), 20000, 'вход');
     if (error) {
       if (/invalid login/i.test(error.message)) throw new Error('Неверный логин или пароль');
+      if (/email not confirmed/i.test(error.message)) {
+        throw new Error('Пользователь не подтверждён. В Supabase → Authentication → Users ' +
+          'откройте его и включите Auto Confirm User.');
+      }
+      if (/failed to fetch|networkerror/i.test(error.message)) {
+        throw new Error('Не достучались до базы. Проверьте supabaseUrl в config.js и интернет.');
+      }
       throw new Error(error.message);
     }
 
     let profile = null;
     try {
-      const res = await STORE.sb.from('profiles').select('*').eq('id', data.user.id).single();
+      const res = await withTimeout(
+        STORE.sb.from('profiles').select('*').eq('id', data.user.id).single(), 15000, 'профиль');
       profile = res.data;
     } catch (e) { /* профиля может не быть — возьмём данные из конфига */ }
 
     if (!acc && !profile) throw new Error('Пользователь не заведён в системе');
     const user = profileFrom(acc || { login: login, role: 'seller', name: login, rack: null }, profile);
+    // без строки в profiles база не поймёт, кто это, и откажет в любой записи (RLS)
+    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2387,19 +2940,24 @@ select.input { appearance: none; padding-right: 34px;
   /** Текущий пользователь или null. */
   async function current() {
     if (!STORE.cloud) return readLocalSession();
-    const { data } = await STORE.sb.auth.getSession();
+    const { data } = await withTimeout(STORE.sb.auth.getSession(), 15000, 'сессия');
     if (!data || !data.session) { clearLocalSession(); return null; }
     const cached = readLocalSession();
-    if (cached) return cached;
     const login = (data.session.user.email || '').split('@')[0];
     const acc = findAccount(login);
-    let profile = null;
+    // Профиль перечитываем при каждом открытии: админ мог сменить сотруднику
+    // стеллаж или роль. Если база не ответила — работаем по сохранённому.
+    let profile = null, failed = false;
     try {
-      const res = await STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).single();
+      const res = await withTimeout(
+        STORE.sb.from('profiles').select('*').eq('id', data.session.user.id).maybeSingle(), 8000, 'профиль');
+      if (res.error) failed = true;
       profile = res.data;
-    } catch (e) { /* без профиля */ }
+    } catch (e) { failed = true; }
+    if (failed && cached) return cached;
     if (!acc && !profile) return null;
     const user = profileFrom(acc || { login, role: 'seller', name: login, rack: null }, profile);
+    user.noProfile = !profile;
     saveLocalSession(user);
     return user;
   }
@@ -2410,7 +2968,7 @@ select.input { appearance: none; padding-right: 34px;
     location.reload();
   }
 
-  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf };
+  window.LC_AUTH = { signIn, current, signOut, findAccount, emailOf, withTimeout };
 })();
 
 
@@ -2519,6 +3077,7 @@ window.LC_ADMIN = (function () {
     { key: 'price', label: 'Прайс', active: ctx.page === 'price' },
     { key: 'buys', label: 'Закупки', active: ctx.page === 'buys' },
     { key: 'moves', label: 'Движения', active: ctx.page === 'moves' },
+    { key: 'users', label: 'Сотрудники', active: ctx.page === 'users' },
     { key: 'settings', label: 'Настройки', active: ctx.page === 'settings' }
   ];
 
@@ -2530,10 +3089,14 @@ window.LC_ADMIN = (function () {
   }
 
   function bindTopbar() {
-    $('topbar').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-nav]');
-      if (b) go(b.dataset.nav);
-    });
+    // шапка перерисовывается при каждом переходе — обработчик клика вешаем один раз
+    if (!$('topbar').dataset.navBound) {
+      $('topbar').dataset.navBound = '1';
+      $('topbar').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-nav]');
+        if (b) go(b.dataset.nav);
+      });
+    }
     const sel = $('topbar').querySelector('[data-nav-select]');
     if (sel) sel.addEventListener('change', (e) => go(e.target.value));
   }
@@ -2542,6 +3105,7 @@ window.LC_ADMIN = (function () {
     if (ctx.page === 'price') { window.LC_PRICE.render($('view'), ctx); return; }
     if (ctx.page === 'buys') { window.LC_BUYS.render($('view'), ctx); return; }
     if (ctx.page === 'moves') { window.LC_MOVES.render($('view'), ctx); return; }
+    if (ctx.page === 'users') { window.LC_USERS.render($('view'), ctx); return; }
     if (ctx.page === 'settings') { window.LC_SETTINGS.render($('view'), ctx); return; }
     renderRacksPage();
   }
@@ -2737,6 +3301,9 @@ window.LC_ADMIN = (function () {
         '<div class="row" style="gap:10px">' +
           '<button class="btn btn-ghost btn-sm" data-act="history" data-rack="' + code + '">Движения</button>' +
           '<button class="btn btn-ghost btn-sm" data-act="add-item" data-rack="' + code + '">+ Позиция</button>' +
+          (r.items.length
+            ? '<button class="btn btn-ghost btn-sm" data-act="audit" data-rack="' + code + '" title="Пересчитать полку и вписать факт">Сверка</button>'
+            : '') +
           (packed
             ? ''
             : '<button class="btn btn-warn btn-sm" data-act="packed" data-rack="' + code + '"' +
@@ -2757,8 +3324,14 @@ window.LC_ADMIN = (function () {
       UI.pips(i) +
       '<span class="pct">' + UI.itemPct(i) + '%</span>' +
       '<span class="status-text ' + st + '">' + UI.ITEM_LABEL[st] + '</span>' +
-      '<button class="step-btn" data-act="minus" data-item="' + i.id + '"' +
-        (i.qty <= 0 ? ' disabled' : '') + ' title="Списать 1 шт">−1</button>' +
+      '<div class="item-acts">' +
+        '<button class="step-btn" data-act="minus" data-item="' + i.id + '"' +
+          (i.qty <= 0 ? ' disabled' : '') + ' title="Снять 1 шт с полки — спросим, куда она делась">−1</button>' +
+        '<button class="step-btn" data-act="plus" data-item="' + i.id + '"' +
+          (i.qty >= i.max ? ' disabled' : '') + ' title="Поставить 1 шт со склада">+1</button>' +
+        '<button class="step-btn" data-act="item" data-item="' + i.id + '" title="Изменить позицию: количество, вместимость, снять со стеллажа">' +
+          UI.icon('edit', 13) + '</button>' +
+      '</div>' +
     '</div>';
   }
 
@@ -3196,6 +3769,188 @@ window.LC_ADMIN = (function () {
     ctx.act(() => STORE.markPacked(code, ctx.user), 'Точка увидит: поставка собрана');
   }
 
+  /* ---------------- ручная правка позиции ----------------
+     Администратор у стеллажа: снял штуку, поставил штуку, поправил
+     количество или вместимость, убрал позицию совсем. Ничего из этого
+     не записывается как продажа, если админ сам так не скажет. */
+
+  const REASONS_DOWN = [
+    { key: 'unload',   label: 'Снял и увёз на склад', hint: 'штука вернётся в остаток склада' },
+    { key: 'writeoff', label: 'Списание: брак, протечка, потеря', hint: 'штука уходит из учёта' },
+    { key: 'audit',    label: 'Сверка: в системе было неверно', hint: 'просто исправляем цифру' },
+    { key: 'sale',     label: 'Продал сам', hint: 'пойдёт в выручку и маржу' }
+  ];
+  const REASONS_UP = [
+    { key: 'restock', label: 'Поставил со склада', hint: 'со склада спишется столько же' },
+    { key: 'audit',   label: 'Сверка: в системе было неверно', hint: 'склад не трогаем' }
+  ];
+
+  function reasonList(list, name, current) {
+    return '<div class="stack-sm" style="gap:6px">' + list.map(r =>
+      '<label class="row" style="gap:10px;cursor:pointer;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px">' +
+        '<input type="radio" name="' + name + '" value="' + r.key + '"' + (r.key === current ? ' checked' : '') + '>' +
+        '<span class="grow">' + UI.esc(r.label) + '<small style="display:block;font-size:11px;color:#64748B">' +
+          UI.esc(r.hint) + '</small></span>' +
+      '</label>').join('') + '</div>';
+  }
+
+  /** Кнопка «−1»: сначала спрашиваем, куда делась штука. */
+  async function minusOne(itemId) {
+    const it = itemById(itemId);
+    if (!it || it.qty <= 0) return;
+    let reason = null;
+    await UI.modal({
+      title: 'Снять 1 шт',
+      subtitle: it.name + (it.brand ? ' · ' + it.brand : '') + ' · на полке ' + it.qty + ' шт',
+      body: '<div class="stack-sm" style="gap:10px"><div style="font-size:13px;color:#8494AC">Что произошло с канистрой?</div>' +
+        reasonList(REASONS_DOWN, 'mReason', 'unload') + '</div>',
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Снять 1 шт', kind: 'btn-primary',
+          onClick: (root) => {
+            const r = root.querySelector('input[name="mReason"]:checked');
+            reason = r ? r.value : 'unload';
+            return true;
+          }
+        }
+      ]
+    });
+    if (!reason) return;
+    const label = REASONS_DOWN.find(r => r.key === reason).label;
+    ctx.act(() => STORE.adjustItem(itemId, { qty: it.qty - 1, reason }, ctx.user), label + ': ' + it.name);
+  }
+
+  /** Окно позиции: точное количество, вместимость, снять со стеллажа. */
+  async function itemModal(itemId) {
+    const it = itemById(itemId);
+    if (!it) return;
+    let result = null;
+
+    await UI.modal({
+      title: it.name,
+      subtitle: [it.brand, it.volume, it.sku].filter(Boolean).join(' · ') + ' · стеллаж ' + it.rack_code,
+      wide: true,
+      noFocus: true,
+      body:
+        '<div class="stack-sm" style="gap:14px">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end">' +
+            '<div class="stack-sm" style="gap:6px"><span style="font-size:12px;color:#8494AC">Сейчас на полке, шт</span>' +
+              '<div id="imQtyBox">' + UI.stepper('imQty', it.qty, it.max) + '</div></div>' +
+            UI.field('Вместимость, шт', 'imMax', '10', 'number', it.max) +
+          '</div>' +
+          '<div id="imReason"></div>' +
+          '<div class="card flat row-between" style="padding:12px 14px;gap:12px;flex-wrap:wrap">' +
+            '<div style="font-size:12px;color:#8494AC;max-width:420px">Убрать позицию со стеллажа совсем. ' +
+              'В прайсе она останется' + (it.qty ? ', а ' + it.qty + ' шт с полки вернутся на склад' : '') + '.</div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="imRemove" style="color:var(--red)">Снять позицию со стеллажа</button>' +
+          '</div>' +
+        '</div>',
+      onOpen: (root, close) => {
+        const box = root.querySelector('#imQtyBox');
+        const maxInp = root.querySelector('#imMax');
+        const reasonHost = root.querySelector('#imReason');
+        let shownFor = 0;
+        const paint = () => {
+          const v = UI.stepperValues(box).imQty;
+          const d = v - it.qty;
+          const sign = d > 0 ? 1 : d < 0 ? -1 : 0;
+          if (sign === shownFor) {
+            const t = reasonHost.querySelector('[data-diff]');
+            if (t) t.textContent = (d > 0 ? '+' : '−') + Math.abs(d) + ' шт';
+            return;
+          }
+          shownFor = sign;
+          reasonHost.innerHTML = !sign ? '' :
+            '<div class="stack-sm" style="gap:8px"><div style="font-size:13px;color:#8494AC">Изменение <b data-diff style="color:var(--text)">' +
+              (d > 0 ? '+' : '−') + Math.abs(d) + ' шт</b> — что произошло?</div>' +
+              (d > 0 ? reasonList(REASONS_UP, 'imR', 'restock') : reasonList(REASONS_DOWN, 'imR', 'unload')) + '</div>';
+        };
+        UI.bindSteppers(box, paint);
+        maxInp.addEventListener('input', () => {
+          const m = Math.max(1, Math.round(Number(maxInp.value) || 1));
+          const st = box.querySelector('[data-stepper]');
+          st.dataset.max = m;
+          st.querySelector('input').max = m;
+          st.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        paint();
+        root.querySelector('#imRemove').addEventListener('click', () => {
+          result = { remove: true };
+          close(null);
+        });
+      },
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Сохранить', kind: 'btn-primary',
+          onClick: (root) => {
+            const qty = UI.stepperValues(root.querySelector('#imQtyBox')).imQty;
+            const max = Math.round(Number(root.querySelector('#imMax').value) || 0);
+            if (max < 1) { UI.toast('Вместимость должна быть больше нуля', 'err'); return false; }
+            const r = root.querySelector('input[name="imR"]:checked');
+            result = { qty, max, reason: r ? r.value : null };
+            return true;
+          }
+        }
+      ]
+    });
+
+    if (!result) return;
+    if (result.remove) {
+      const ok = await UI.confirmBox('Снять «' + it.name + '» со стеллажа ' + it.rack_code + '?',
+        it.qty ? 'На полке ' + it.qty + ' шт — они вернутся на склад. Позиция останется в прайсе.' : 'Позиция останется в прайсе.',
+        'Снять позицию', 'btn-danger');
+      if (ok) ctx.act(() => STORE.removeItem(itemId, ctx.user), 'Позиция снята со стеллажа');
+      return;
+    }
+    if (result.qty === it.qty && result.max === it.max) return;
+    ctx.act(() => STORE.adjustItem(itemId, result, ctx.user), 'Позиция обновлена');
+  }
+
+  /** Сверка всей полки разом: пересчитал — вписал факт. */
+  async function rackAuditModal(code) {
+    const rack = ctx.racks.find(r => r.code === code);
+    if (!rack || !rack.items.length) return;
+    await UI.modal({
+      title: 'Сверка ' + rack.code,
+      subtitle: 'Пересчитайте канистры на полке и впишите фактическое количество. В продажи это не попадёт.',
+      wide: true,
+      noFocus: true,
+      body: '<div class="stack-sm" style="gap:0">' + rack.items.map(i =>
+        '<div class="fill-row">' +
+          '<div class="t"><b>' + UI.esc(i.name) + '</b>' +
+            '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) + '</small></div>' +
+          '<div class="have">в системе<br><span style="color:#B9C6DA">' + i.qty + ' из ' + i.max + '</span></div>' +
+          UI.stepper(i.id, i.qty, i.max) +
+        '</div>').join('') + '</div>',
+      onOpen: (root) => { UI.bindSteppers(root); },
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Сохранить факт', kind: 'btn-primary',
+          onClick: (root) => {
+            const vals = UI.stepperValues(root);
+            ctx.act(async () => {
+              let changed = 0;
+              for (const id of Object.keys(vals)) {
+                const item = itemById(id);
+                if (!item || vals[id] === item.qty) continue;
+                await STORE.setQty(id, vals[id], {
+                  type: 'audit', user_login: ctx.user.login, user_name: ctx.user.name, note: 'сверка администратором'
+                });
+                changed++;
+              }
+              if (!changed) throw new Error('Расхождений нет — всё сходится');
+              return changed;
+            }, (n) => 'Сверка сохранена, исправлено позиций: ' + n);
+            return true;
+          }
+        }
+      ]
+    });
+  }
+
   /* ---------------- маршрут и выгрузка ---------------- */
 
   async function routeModal() {
@@ -3295,12 +4050,15 @@ window.LC_ADMIN = (function () {
         const r = ctx.racks.find(x => x.code === b.dataset.rack);
         if (r) UI.photoModal(r.photo, r.code + ' · ' + r.station);
       }
-      if (a === 'minus') {
+      if (a === 'minus') minusOne(b.dataset.item);
+      if (a === 'plus') {
         const it = itemById(b.dataset.item);
-        ctx.act(() => STORE.changeQty(b.dataset.item, -1, {
-          type: 'sale', user_login: ctx.user.login, user_name: ctx.user.name, note: 'списано администратором'
-        }), 'Списано: ' + (it ? it.name : '1 шт'));
+        ctx.act(() => STORE.changeQty(b.dataset.item, +1, {
+          type: 'restock', user_login: ctx.user.login, user_name: ctx.user.name, note: 'поставлено администратором'
+        }), 'Поставлено со склада: ' + (it ? it.name : '1 шт'));
       }
+      if (a === 'item') itemModal(b.dataset.item);
+      if (a === 'audit') rackAuditModal(b.dataset.rack);
     });
 
     $('rightCol').addEventListener('click', (e) => {
@@ -3316,13 +4074,577 @@ window.LC_ADMIN = (function () {
     UI.applyTheme();
     document.title = 'Панель администратора — ' + CFG.texts.brand;
     renderTopbar();
-    UI.modeBanner();
+    UI.modeBanner(ctx.user);
     await refresh();
     STORE.onChange(refresh);
     void CFG;
   }
 
   return { mount, go, fillModal, ctx };
+})();
+
+
+
+/* ============================================================
+   Lube Control — ЗАГРУЗКА ИЗ ФАЙЛА
+   Прайс и закупки из CSV (Excel «CSV, разделитель ;»), а также XLSX.
+   Сам находит строку заголовков, сопоставляет колонки по названиям,
+   понимает кодировки UTF-8 и Windows-1251, запятую в ценах и пробелы
+   в тысячах. Перед записью показывает, что будет сделано с каждой строкой.
+   ============================================================ */
+
+window.LC_IMPORT = (function () {
+  const CFG = window.LC_CONFIG;
+  const UI = window.LC_UI;
+
+  /* ---------------- поля и их узнавание по заголовку ----------------
+     Порядок важен: «Цена закупки» должна стать закупкой раньше,
+     чем её перехватит общее слово «цена». */
+  const FIELDS = [
+    { key: 'cost',     label: 'Закупка, ₽',  re: [/закуп/, /вход/, /себест/, /опт/, /cost/, /приход/] },
+    { key: 'price',    label: 'Продажа, ₽',  re: [/прода/, /розн/, /price/, /цена/, /стоимост/] },
+    { key: 'qty',      label: 'Количество',  re: [/^кол/, /количеств/, /^шт/, /qty/, /quantity/] },
+    { key: 'sku',      label: 'Артикул',     re: [/артик/, /^код/, /sku/, /^арт/, /каталожн/, /part/] },
+    { key: 'category', label: 'Категория',   re: [/катег/, /групп/, /^тип/, /^вид/] },
+    { key: 'brand',    label: 'Фирма',       re: [/бренд/, /фирм/, /производ/, /марка/, /brand/, /изготов/] },
+    { key: 'volume',   label: 'Объём',       re: [/объ[её]м/, /литраж/, /фасов/, /volume/, /[её]мкост/] },
+    { key: 'supplier', label: 'Поставщик',   re: [/поставщ/, /контраг/, /supplier/] },
+    { key: 'payment',  label: 'Оплата',      re: [/оплат/, /payment/] },
+    { key: 'date',     label: 'Дата',        re: [/дата/, /date/] },
+    { key: 'name',     label: 'Название',    re: [/наимен/, /назв/, /товар/, /номенкл/, /^name/, /описан/, /позиц/] }
+  ];
+  const MODES = {
+    price: {
+      fields: ['name', 'brand', 'volume', 'sku', 'category', 'cost', 'price'],
+      order:  ['category', 'name', 'brand', 'volume', 'sku', 'cost', 'price'],
+      template: [['Категория', 'Название', 'Фирма', 'Объём', 'Артикул', 'Закупка', 'Продажа'],
+                 ['Моторное масло', 'Magnatec 5W-30 A5', 'Castrol', '4 л', '15C94B', 3150, 4290],
+                 ['Антифриз', 'Антифриз G12+ красный', 'Sintec', '5 кг', '990558', 780, 1190]]
+    },
+    buys: {
+      fields: ['name', 'brand', 'volume', 'sku', 'category', 'cost', 'price', 'qty', 'supplier', 'payment', 'date'],
+      order:  ['name', 'brand', 'volume', 'sku', 'qty', 'cost', 'price'],
+      template: [['Название', 'Фирма', 'Объём', 'Артикул', 'Количество', 'Закупка', 'Продажа'],
+                 ['Magnatec 5W-30 A5', 'Castrol', '4 л', '15C94B', 12, 3150, 4290],
+                 ['Антифриз G12+ красный', 'Sintec', '5 кг', '990558', 20, 780, 1190]]
+    }
+  };
+  const fieldLabel = (k) => (FIELDS.find(f => f.key === k) || {}).label || k;
+
+  /* ---------------- чтение файла ---------------- */
+
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload = () => resolve();
+      sc.onerror = () => reject(new Error('Не удалось загрузить модуль Excel. Сохраните файл как CSV (разделитель «;») и загрузите его.'));
+      document.head.appendChild(sc);
+    });
+  }
+
+  function parseCsv(text) {
+    const first = text.split(/\r?\n/).slice(0, 5).join('\n');
+    const count = (ch) => first.split(ch).length - 1;
+    const cands = [';', '\t', ','];
+    let delim = ';', best = -1;
+    cands.forEach(c => { const n = count(c); if (n > best) { best = n; delim = c; } });
+
+    const rows = [];
+    let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { cell += '"'; i++; } else q = false;
+        } else cell += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === delim) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row); row = []; cell = '';
+      } else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
+  async function readFile(file) {
+    const name = (file.name || '').toLowerCase();
+    const buf = await file.arrayBuffer();
+    let rows;
+    if (/\.(xlsx|xls|ods)$/.test(name)) {
+      await loadXlsx();
+      const wb = window.XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    } else {
+      let text;
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+      catch (e) { text = new TextDecoder('windows-1251').decode(buf); }   // Excel в России сохраняет CSV так
+      rows = parseCsv(text.replace(/^\uFEFF/, ''));
+    }
+    rows = rows
+      .map(r => (r || []).map(v => (v === null || v === undefined) ? '' : (typeof v === 'string' ? v.trim() : v)))
+      .filter(r => r.some(v => String(v).trim() !== ''));
+    if (!rows.length) throw new Error('Файл пустой');
+    return rows;
+  }
+
+  /* ---------------- разбор значений ---------------- */
+
+  function num(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : 0;
+    let t = String(v || '').replace(/[\s\u00a0]/g, '').replace(/[^0-9,.\-]/g, '');
+    if (!t) return 0;
+    const lc = t.lastIndexOf(','), ld = t.lastIndexOf('.');
+    if (lc >= 0 && ld >= 0) {
+      const dec = Math.max(lc, ld);
+      t = t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1);
+    } else if (lc >= 0) t = t.replace(/,/g, '.');
+    const n = parseFloat(t);
+    return isFinite(n) ? n : 0;
+  }
+
+  function date(v) {
+    if (typeof v === 'number' && v > 20000 && v < 80000) {           // дата Excel
+      const d = new Date(Math.round((v - 25569) * 864e5));
+      return d.toISOString().slice(0, 10);
+    }
+    const t = String(v || '').trim();
+    let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = /^(\d{1,2})[./](\d{1,2})[./](\d{2,4})/.exec(t);
+    if (m) {
+      const y = m[3].length === 2 ? '20' + m[3] : m[3];
+      return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    }
+    return '';
+  }
+
+  const CAT_WORDS = [
+    ['motor', /мотор|двигат|5w|0w|10w|15w|engine/],
+    ['gear', /трансмис|кпп|акпп|мкпп|atf|cvt|вариат|редукт|75w|80w|85w|gear|гидроус|гур/],
+    ['coolant', /антифриз|тосол|охлажд|coolant|g1[1-3]/],
+    ['brake', /тормоз|dot ?[3-5]|brake/],
+    ['washer', /омыват|незамерз|стеклоом|washer/]
+  ];
+  function category(text, name) {
+    const t = String(text || '').trim().toLowerCase();
+    if (t) {
+      const byKey = CFG.categories.find(c => c.key === t);
+      if (byKey) return byKey.key;
+      const byLabel = CFG.categories.find(c => c.label.toLowerCase() === t || t.indexOf(c.label.toLowerCase()) >= 0);
+      if (byLabel) return byLabel.key;
+      const w = CAT_WORDS.find(x => x[1].test(t));
+      if (w) return w[0];
+    }
+    const n = String(name || '').toLowerCase();
+    const w = CAT_WORDS.find(x => x[1].test(n));
+    return w ? w[0] : 'other';
+  }
+
+  function volume(v) {
+    if (typeof v === 'number') return v + ' л';
+    const t = String(v || '').trim();
+    return /^\d+([.,]\d+)?$/.test(t) ? t.replace('.', ',') + ' л' : t;
+  }
+
+  /* ---------------- сопоставление с прайсом ---------------- */
+
+  const norm = (v) => String(v || '').toLowerCase().replace(/ё/g, 'е').replace(/[\s\-_.,/\\]+/g, '');
+  const volKey = (v) => String(v || '').toLowerCase().replace(',', '.').replace(/[^0-9.]/g, '');
+  const itemKey = (name, brand, vol) => norm(name) + '|' + norm(brand) + '|' + volKey(vol);
+
+  function catalogIndex(catalog) {
+    const bySku = {}, byKey = {};
+    catalog.slice().sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0)).forEach(c => {
+      const s = norm(c.sku);
+      if (s && !bySku[s]) bySku[s] = c;
+      const k = itemKey(c.name, c.brand, c.volume);
+      if (!byKey[k]) byKey[k] = c;
+    });
+    return { bySku, byKey };
+  }
+
+  /* ---------------- заголовки ---------------- */
+
+  function guessField(header, allowed, taken) {
+    const h = String(header || '').toLowerCase().replace(/ё/g, 'е').trim();
+    if (!h) return '';
+    for (const f of FIELDS) {
+      if (allowed.indexOf(f.key) < 0 || taken[f.key]) continue;
+      if (f.re.some(r => r.test(h))) return f.key;
+    }
+    return '';
+  }
+
+  /** Ищет строку заголовков в первых 15 строках. */
+  function detect(rows, mode) {
+    const allowed = MODES[mode].fields;
+    let bestRow = -1, bestMap = null, bestScore = 1;
+    rows.slice(0, 15).forEach((r, idx) => {
+      const taken = {};
+      const map = r.map(h => {
+        const f = guessField(h, allowed, taken);
+        if (f) taken[f] = true;
+        return f;
+      });
+      const score = map.filter(Boolean).length;
+      if (score > bestScore && taken.name) { bestScore = score; bestRow = idx; bestMap = map; }
+    });
+    const width = Math.max(...rows.slice(0, 50).map(r => r.length));
+    if (bestRow < 0) {
+      // заголовков нет — считаем, что колонки идут как в шаблоне
+      const order = MODES[mode].order;
+      return { headerRow: -1, map: Array.from({ length: width }, (_, i) => order[i] || '') };
+    }
+    const map = bestMap.slice();
+    while (map.length < width) map.push('');
+    return { headerRow: bestRow, map };
+  }
+
+  /* ---------------- разбор строк ---------------- */
+
+  function analyze(state, catalog, opts) {
+    const idx = catalogIndex(catalog);
+    const col = {};
+    state.map.forEach((f, i) => { if (f && col[f] === undefined) col[f] = i; });
+    const get = (r, f) => col[f] === undefined ? '' : r[col[f]];
+
+    const seen = {};
+    return state.rows.slice(state.headerRow + 1).map((r, n) => {
+      const name = String(get(r, 'name') || '').trim();
+      const x = {
+        n: state.headerRow + 2 + n,
+        name,
+        brand: String(get(r, 'brand') || '').trim(),
+        volume: volume(get(r, 'volume')),
+        sku: String(get(r, 'sku') || '').trim(),
+        category: category(get(r, 'category'), name),
+        cost: num(get(r, 'cost')),
+        price: num(get(r, 'price')),
+        qty: Math.round(num(get(r, 'qty'))),
+        supplier: String(get(r, 'supplier') || '').trim(),
+        payment: String(get(r, 'payment') || '').trim(),
+        date: date(get(r, 'date')),
+        hasCost: col.cost !== undefined && String(get(r, 'cost')).trim() !== '',
+        hasPrice: col.price !== undefined && String(get(r, 'price')).trim() !== ''
+      };
+      if (!name) return Object.assign(x, { status: 'skip', why: 'нет названия' });
+
+      const match = (x.sku && idx.bySku[norm(x.sku)]) || idx.byKey[itemKey(x.name, x.brand, x.volume)] || null;
+      x.match = match;
+
+      if (opts.mode === 'price') {
+        const k = x.sku ? 's:' + norm(x.sku) : 'k:' + itemKey(x.name, x.brand, x.volume);
+        if (seen[k]) return Object.assign(x, { status: 'skip', why: 'повтор строки ' + seen[k] });
+        seen[k] = x.n;
+        if (!match) return Object.assign(x, opts.addNew
+          ? { status: 'new', why: 'новая позиция' }
+          : { status: 'skip', why: 'нет в прайсе' });
+        const patch = {};
+        if (opts.updatePrices && x.hasCost && x.cost > 0 && x.cost !== Number(match.cost)) patch.cost = x.cost;
+        if (opts.updatePrices && x.hasPrice && x.price > 0 && x.price !== Number(match.price)) patch.price = x.price;
+        if (x.sku && !match.sku) patch.sku = x.sku;
+        if (!Object.keys(patch).length) return Object.assign(x, { status: 'same', why: 'уже в прайсе' });
+        return Object.assign(x, { status: 'update', patch,
+          why: [patch.cost !== undefined ? 'закупка ' + UI.num(match.cost) + ' → ' + UI.num(patch.cost) : '',
+                patch.price !== undefined ? 'продажа ' + UI.num(match.price) + ' → ' + UI.num(patch.price) : '',
+                patch.sku ? 'артикул' : ''].filter(Boolean).join(' · ') });
+      }
+
+      // закупка
+      if (!(x.qty > 0)) return Object.assign(x, { status: 'skip', why: col.qty === undefined ? 'нет колонки «Количество»' : 'количество 0' });
+      if (match) {
+        const cost = x.cost > 0 ? x.cost : Number(match.cost) || 0;
+        return Object.assign(x, { status: 'found', cost,
+          why: x.cost > 0 && x.cost !== Number(match.cost) ? 'закупка ' + UI.num(match.cost) + ' → ' + UI.num(x.cost) : 'есть в прайсе' });
+      }
+      if (!opts.addNew) return Object.assign(x, { status: 'skip', why: 'нет в прайсе' });
+      return Object.assign(x, { status: 'new', why: 'добавится в прайс' + (x.price > 0 ? '' : ' без цены продажи') });
+    });
+  }
+
+  const STATUS = {
+    new:    { label: 'новая',       cls: 'ok' },
+    update: { label: 'обновится',   cls: 'low' },
+    same:   { label: 'без изменений', cls: 'neutral' },
+    found:  { label: 'в прайсе',    cls: 'ok' },
+    skip:   { label: 'пропуск',     cls: 'empty' }
+  };
+
+  /* ---------------- окно загрузки ---------------- */
+
+  /**
+   * mode: 'price' | 'buys'. ctx — контекст панели администратора.
+   * Возвращает промис; запись в базу делает сам через ctx.act.
+   */
+  async function open(mode, ctx) {
+    const isBuys = mode === 'buys';
+    const opts = { mode, addNew: true, updatePrices: true, updateCost: true, updatePrice: true };
+    const meta = {
+      date: new Date().toISOString().slice(0, 10), supplier: '',
+      payment: (CFG.payments || [])[0] || ''
+    };
+    let state = null;     // { file, rows, headerRow, map }
+    let result = [];
+
+    const suppliers = Array.from(new Set((ctx.purchases || []).map(p => p.supplier).filter(Boolean))).sort();
+
+    function templateCsv() {
+      UI.downloadFile((isBuys ? 'shablon-zakupki' : 'shablon-prays') + '.csv', UI.csv(MODES[mode].template));
+      UI.toast('Шаблон скачан — заполните и загрузите обратно', 'ok');
+    }
+
+    function dropHtml(err) {
+      return '<div class="stack-sm" style="gap:12px">' +
+        '<div class="imp-drop" id="impDrop">' + UI.icon('up', 22) +
+          '<b style="font-size:14px;color:var(--text)">Выберите файл или перетащите сюда</b>' +
+          '<span>CSV из Excel (разделитель «;» или «,»), XLSX. Кодировку определим сами.</span>' +
+        '</div>' +
+        (err ? '<div style="font-size:13px;color:var(--red)">' + UI.esc(err) + '</div>' : '') +
+        '<div style="font-size:12px;color:#64748B;line-height:1.55">' +
+          (isBuys
+            ? 'Нужны колонки: <b>Название</b> и <b>Количество</b>. Желательно: Фирма, Объём, Артикул, Закупка. ' +
+              'Товар ищем в прайсе по артикулу, потом по названию + фирме + объёму. Чего нет — добавим в прайс.'
+            : 'Нужна колонка <b>Название</b>. Желательно: Категория, Фирма, Объём, Артикул, Закупка, Продажа. ' +
+              'Совпадения ищем по артикулу, потом по названию + фирме + объёму — у найденных обновим цены.') +
+          ' Порядок колонок любой, лишние колонки не мешают.' +
+          ' <a href="#" id="impTpl" style="color:var(--amber)">Скачать шаблон</a>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function optsHtml() {
+      const cb = (id, on, text) => '<label><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '> ' + text + '</label>';
+      if (!isBuys) {
+        return '<div class="imp-opts">' +
+          cb('oNew', opts.addNew, 'Добавлять новые позиции') +
+          cb('oUpd', opts.updatePrices, 'Обновлять закупку и продажу у позиций, которые уже есть (цены на стеллажах тоже обновятся)') +
+        '</div>';
+      }
+      return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+          UI.field('Дата поставки', 'mDate', '', 'date', meta.date) +
+          '<div class="field"><label for="mSup">Поставщик</label>' +
+            '<input class="input sm" id="mSup" list="mSupList" placeholder="Например, Автоформула" value="' + UI.esc(meta.supplier) + '">' +
+            '<datalist id="mSupList">' + suppliers.map(s => '<option value="' + UI.esc(s) + '">').join('') + '</datalist></div>' +
+          '<div class="field"><label for="mPay">Оплата</label><select class="input sm" id="mPay">' +
+            (CFG.payments || []).map(p => '<option' + (p === meta.payment ? ' selected' : '') + '>' + UI.esc(p) + '</option>').join('') +
+          '</select></div>' +
+        '</div>' +
+        '<div class="imp-opts" style="margin-top:4px">' +
+          cb('oNew', opts.addNew, 'Товар, которого нет в прайсе, — добавить в прайс') +
+          cb('oCost', opts.updateCost, 'Новую цену закупки записать в прайс') +
+          cb('oPrice', opts.updatePrice, 'Цену продажи из файла записать в прайс (если колонка есть)') +
+        '</div>';
+    }
+
+    function mapHtml() {
+      const allowed = MODES[mode].fields;
+      const head = state.headerRow >= 0 ? state.rows[state.headerRow] : [];
+      const sample = state.rows[state.headerRow + 1] || [];
+      return '<div class="imp-map">' + state.map.map((f, i) => {
+        const title = String(head[i] || '').trim() || 'Колонка ' + (i + 1);
+        const ex = String(sample[i] === undefined ? '' : sample[i]).slice(0, 24);
+        return '<label title="' + UI.esc(title + (ex ? ' — например: ' + ex : '')) + '"><span>' +
+            UI.esc(title) + (ex ? ' · <i style="color:#4B5A75">' + UI.esc(ex) + '</i>' : '') + '</span>' +
+          '<select class="input" data-col="' + i + '">' +
+            '<option value="">— не брать —</option>' +
+            allowed.map(k => '<option value="' + k + '"' + (f === k ? ' selected' : '') + '>' + fieldLabel(k) + '</option>').join('') +
+          '</select></label>';
+      }).join('') + '</div>';
+    }
+
+    function previewHtml() {
+      const counts = {};
+      result.forEach(x => { counts[x.status] = (counts[x.status] || 0) + 1; });
+      const go = result.filter(x => x.status !== 'skip' && x.status !== 'same');
+      const qty = go.reduce((s, x) => s + (x.qty || 0), 0);
+      const sum = go.reduce((s, x) => s + (x.qty || 0) * (x.cost || 0), 0);
+      const noPrice = result.filter(x => x.status === 'new' && !(x.price > 0)).length;
+
+      const pill = (st, n) => n ? '<span class="pill sm ' + STATUS[st].cls + '">' + STATUS[st].label + ': ' + n + '</span>' : '';
+      const cols = isBuys
+        ? ['Стр.', 'Статус', 'Товар', 'Объём', 'Артикул', 'Кол-во', 'Закупка', 'Сумма', 'Что будет']
+        : ['Стр.', 'Статус', 'Товар', 'Категория', 'Объём', 'Артикул', 'Закупка', 'Продажа', 'Что будет'];
+
+      return '<div class="imp-sum">' +
+          pill('new', counts.new) + pill('update', counts.update) + pill('found', counts.found) +
+          pill('same', counts.same) + pill('skip', counts.skip) +
+          (isBuys && go.length ? '<span class="pill sm neutral">итого ' + UI.num(qty) + ' шт · ' + UI.money(sum) + '</span>' : '') +
+        '</div>' +
+        (noPrice ? '<div style="font-size:12px;color:var(--orange)">У ' + noPrice +
+          ' новых позиций нет цены продажи — поставьте её потом в прайсе, иначе продажи пойдут по 0 ₽.</div>' : '') +
+        '<div class="imp-prev"><table class="grid"><thead><tr>' +
+          cols.map((c, i) => '<th' + (i >= 5 && i <= 7 ? ' class="r"' : '') + '>' + c + '</th>').join('') +
+        '</tr></thead><tbody>' +
+        result.slice(0, 300).map(x => {
+          const st = STATUS[x.status];
+          return '<tr' + (x.status === 'skip' ? ' style="opacity:.55"' : '') + '>' +
+            '<td style="color:#4B5A75">' + x.n + '</td>' +
+            '<td><span class="pill sm ' + st.cls + '">' + st.label + '</span></td>' +
+            '<td><div class="prod"><b>' + UI.esc(x.name || '—') + '</b><small>' + UI.esc(x.brand || '') + '</small></div></td>' +
+            (isBuys ? '' : '<td>' + UI.catBadge(x.category) + '</td>') +
+            '<td>' + UI.esc(x.volume || '—') + '</td>' +
+            '<td><span class="sku">' + UI.esc(x.sku || '—') + '</span></td>' +
+            (isBuys
+              ? '<td class="r">' + (x.qty || '—') + '</td><td class="r">' + (x.cost ? UI.num(x.cost) : '—') + '</td>' +
+                '<td class="r">' + (x.qty && x.cost ? UI.num(x.qty * x.cost) : '—') + '</td>'
+              : '<td class="r">' + (x.cost ? UI.num(x.cost) : '—') + '</td><td class="r">' + (x.price ? UI.num(x.price) : '—') + '</td>') +
+            '<td style="font-size:11px;color:#8494AC">' + UI.esc(x.why || '') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+        (result.length > 300 ? '<div style="font-size:12px;color:#64748B">Показаны первые 300 строк из ' + result.length + ' — загрузятся все.</div>' : '');
+    }
+
+    function bodyHtml() {
+      if (!state) return '<div id="impBody">' + dropHtml('') + '</div>';
+      return '<div id="impBody" class="stack-sm" style="gap:14px">' +
+        '<div class="row-between" style="gap:10px;flex-wrap:wrap">' +
+          '<div style="font-size:13px"><b>' + UI.esc(state.file) + '</b> <span style="color:#64748B">· строк: ' +
+            (state.rows.length - state.headerRow - 1) + (state.headerRow >= 0 ? ' · заголовки в строке ' + (state.headerRow + 1) : ' · без заголовков') + '</span></div>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="impOther">Другой файл</button>' +
+        '</div>' +
+        optsHtml() +
+        '<div class="stack-sm" style="gap:6px"><div style="font-size:12px;color:#8494AC">Какая колонка чем является — поправьте, если угадали неверно:</div>' + mapHtml() + '</div>' +
+        '<div id="impPrev" class="stack-sm" style="gap:10px">' + previewHtml() + '</div>' +
+      '</div>';
+    }
+
+    let root = null;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.csv,.txt,.tsv,.xlsx,.xls,.ods,text/csv';
+
+    function recompute() {
+      result = analyze(state, ctx.catalog || [], opts);
+      const p = root.querySelector('#impPrev');
+      if (p) p.innerHTML = previewHtml();
+    }
+
+    function paint(err) {
+      const host = root.querySelector('#impBody');
+      host.outerHTML = state ? bodyHtml() : '<div id="impBody">' + dropHtml(err) + '</div>';
+      wire();
+    }
+
+    async function takeFile(f) {
+      if (!f) return;
+      try {
+        const rows = await readFile(f);
+        const d = detect(rows, mode);
+        state = { file: f.name, rows, headerRow: d.headerRow, map: d.map };
+        result = analyze(state, ctx.catalog || [], opts);
+        paint();
+      } catch (e) {
+        state = null;
+        paint(e.message || 'Не удалось прочитать файл');
+      }
+    }
+
+    function wire() {
+      const drop = root.querySelector('#impDrop');
+      if (drop) {
+        drop.addEventListener('click', () => fileInput.click());
+        drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+        drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+        drop.addEventListener('drop', (e) => {
+          e.preventDefault(); drop.classList.remove('over');
+          takeFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
+      }
+      const tpl = root.querySelector('#impTpl');
+      if (tpl) tpl.addEventListener('click', (e) => { e.preventDefault(); templateCsv(); });
+      const other = root.querySelector('#impOther');
+      if (other) other.addEventListener('click', () => fileInput.click());
+
+      root.querySelectorAll('[data-col]').forEach(sel => sel.addEventListener('change', () => {
+        const i = Number(sel.dataset.col);
+        if (sel.value) state.map = state.map.map((f, j) => (j !== i && f === sel.value) ? '' : f);
+        state.map[i] = sel.value;
+        root.querySelectorAll('[data-col]').forEach(s2 => { s2.value = state.map[Number(s2.dataset.col)] || ''; });
+        recompute();
+      }));
+      const on = (id, fn) => { const el = root.querySelector('#' + id); if (el) el.addEventListener('change', () => { fn(el); recompute(); }); };
+      on('oNew', el => { opts.addNew = el.checked; });
+      on('oUpd', el => { opts.updatePrices = el.checked; });
+      on('oCost', el => { opts.updateCost = el.checked; });
+      on('oPrice', el => { opts.updatePrice = el.checked; });
+      const inp = (id, key) => { const el = root.querySelector('#' + id); if (el) el.addEventListener('input', () => { meta[key] = el.value; }); };
+      inp('mDate', 'date'); inp('mSup', 'supplier');
+      const pay = root.querySelector('#mPay');
+      if (pay) pay.addEventListener('change', () => { meta.payment = pay.value; });
+    }
+
+    fileInput.addEventListener('change', () => {
+      takeFile(fileInput.files && fileInput.files[0]);
+      fileInput.value = '';
+    });
+
+    let job = null;
+    await UI.modal({
+      title: isBuys ? 'Закупка из файла' : 'Прайс из файла',
+      subtitle: isBuys
+        ? 'Целая накладная или прайс поставщика одним файлом — каждая строка станет закупкой'
+        : 'Загрузите прайс целиком — новые позиции добавятся, у найденных обновятся цены',
+      cls: 'xwide',
+      noFocus: true,
+      body: bodyHtml(),
+      onOpen: (r) => { root = r; wire(); },
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: isBuys ? 'Провести закупку' : 'Загрузить в прайс', kind: 'btn-primary',
+          onClick: () => {
+            if (!state) { UI.toast('Сначала выберите файл', 'err'); return false; }
+            if (!state.map.includes('name')) { UI.toast('Укажите, какая колонка — «Название»', 'err'); return false; }
+            if (isBuys && !state.map.includes('qty')) { UI.toast('Укажите, какая колонка — «Количество»', 'err'); return false; }
+            const go = result.filter(x => x.status !== 'skip' && x.status !== 'same');
+            if (!go.length) { UI.toast('Загружать нечего — все строки пропускаются', 'err'); return false; }
+            if (isBuys && !meta.date) { UI.toast('Укажите дату поставки', 'err'); return false; }
+            job = go;
+            return true;
+          }
+        }
+      ]
+    });
+
+    if (!job) return;
+    const STORE = window.LC_STORE;
+    if (!isBuys) {
+      const add = job.filter(x => x.status === 'new').map(x => ({
+        category: x.category, name: x.name, brand: x.brand, volume: x.volume, sku: x.sku, cost: x.cost, price: x.price
+      }));
+      const update = job.filter(x => x.status === 'update').map(x => ({ id: x.match.id, patch: x.patch }));
+      ctx.act(() => STORE.importCatalog({ add, update, file: state.file }, ctx.user),
+        (r) => 'Прайс загружен: добавлено ' + r.added + ', обновлено ' + r.updated);
+      return;
+    }
+    // одинаковые новые товары в разных строках — одна позиция прайса
+    const fresh = {};
+    const lines = job.map(x => {
+      const line = { qty: x.qty, cost: x.cost, price: x.hasPrice ? x.price : 0,
+        supplier: x.supplier, payment: x.payment, date: x.date };
+      if (x.match) line.catalog_id = x.match.id;
+      else {
+        const k = x.sku ? 's:' + norm(x.sku) : 'k:' + itemKey(x.name, x.brand, x.volume);
+        fresh[k] = fresh[k] || { category: x.category, name: x.name, brand: x.brand, volume: x.volume,
+          sku: x.sku, cost: x.cost, price: x.price };
+        line.newCat = fresh[k];
+      }
+      return line;
+    });
+    ctx.act(() => STORE.importPurchases(lines, Object.assign({}, meta, {
+        updateCost: opts.updateCost, updatePrice: opts.updatePrice, file: state.file
+      }), ctx.user),
+      (r) => 'Закупка проведена: ' + r.lines + ' строк, ' + UI.num(r.qty) + ' шт на ' + UI.money(r.sum) +
+        (r.created ? ' · новых в прайсе: ' + r.created : '') + (r.updated ? ' · цены обновлены: ' + r.updated : ''));
+  }
+
+  return { open, parseCsv, num, date, detect, analyze };
 })();
 
 
@@ -3455,6 +4777,7 @@ window.LC_PRICE = (function () {
         '<div class="page-head">' +
           '<div><h1>Прайс</h1><p>Все жидкости, которыми торгуем. Отсюда позиции ставятся на стеллажи.</p></div>' +
           '<div class="page-actions">' +
+            '<button class="btn btn-ghost" id="pImport">' + UI.icon('up', 15) + '<span>Загрузить из файла</span></button>' +
             '<button class="btn btn-ghost" id="pExport">' + UI.icon('down', 15) + '<span>Выгрузить прайс</span></button>' +
             '<button class="btn btn-primary" id="pAdd">' + UI.icon('plus', 15, '#12161F', 2) + '<span>Позиция в прайс</span></button>' +
           '</div>' +
@@ -3573,6 +4896,9 @@ window.LC_PRICE = (function () {
 
     const exp = host.querySelector('#pExport');
     if (exp) exp.addEventListener('click', exportCsv);
+
+    const imp = host.querySelector('#pImport');
+    if (imp) imp.addEventListener('click', () => window.LC_IMPORT.open('price', ctx));
 
     const table = host.querySelector('.grid');
     if (!table) return;
@@ -3839,6 +5165,7 @@ window.LC_BUYS = (function () {
           '<div><h1>Закупки</h1>' +
             '<p>Что и почём привезли на склад. Отсюда товар уезжает на стеллажи.</p></div>' +
           '<div class="page-actions">' +
+            '<button class="btn btn-ghost" id="bImport">' + UI.icon('up', 15) + '<span>Закупка из файла</span></button>' +
             '<button class="btn btn-ghost" id="bExport">' + UI.icon('down', 15) + '<span>Выгрузить в CSV</span></button>' +
             '<button class="btn btn-primary" id="bAdd">' + UI.icon('plus', 15, '#12161F', 2) + '<span>Новая закупка</span></button>' +
           '</div>' +
@@ -3968,6 +5295,7 @@ window.LC_BUYS = (function () {
 
     host.querySelector('#bAdd').addEventListener('click', () => editModal(null));
     host.querySelector('#bExport').addEventListener('click', exportCsv);
+    host.querySelector('#bImport').addEventListener('click', () => window.LC_IMPORT.open('buys', ctx));
 
     const table = host.querySelector('.grid');
     if (!table) return;
@@ -4190,6 +5518,7 @@ window.LC_MOVES = (function () {
     { key: 'audit', label: 'Сверки' },
     { key: 'setup', label: 'Стеллажи' },
     { key: 'price', label: 'Прайс' },
+    { key: 'users', label: 'Сотрудники' },
     { key: 'all',   label: 'Всё' }
   ];
   const PERIODS = [
@@ -4412,6 +5741,308 @@ window.LC_MOVES = (function () {
 
   return { render, openFor };
 })();
+
+
+/* ============================================================
+   Lube Control — СОТРУДНИКИ
+   Учётные записи прямо с сайта: завести продавца, закрепить за ним
+   стеллаж, сменить пароль, удалить. Без захода в Supabase.
+   ============================================================ */
+
+window.LC_USERS = (function () {
+  const CFG = window.LC_CONFIG;
+  const STORE = window.LC_STORE;
+  const UI = window.LC_UI;
+
+  let ctx = null;
+  let host = null;
+  let users = null;
+  let error = '';
+  let loading = false;
+  let loadedAt = 0;
+
+  async function load(force) {
+    if (loading) return;
+    if (!force && Date.now() - loadedAt < 3000) return;
+    loading = true;
+    try { users = await STORE.listUsers(); error = ''; }
+    catch (e) { error = e.message || 'Не удалось получить список'; if (!users) users = []; }
+    loading = false;
+    loadedAt = Date.now();
+    if (ctx && ctx.page === 'users' && host) draw();
+  }
+
+  function render(h, context) {
+    host = h; ctx = context;
+    draw();
+    load(false);
+  }
+
+  const rackLabel = (code) => {
+    if (!code) return '';
+    const r = ctx.racks.find(x => x.code === code);
+    return r ? code + ' · ' + r.station : code + ' (стеллажа пока нет)';
+  };
+
+  function draw() {
+    const list = (users || []).slice().sort((a, b) =>
+      (a.role === 'admin' ? 0 : 1) - (b.role === 'admin' ? 0 : 1) || String(a.login).localeCompare(String(b.login)));
+    const sellers = list.filter(u => u.role !== 'admin');
+    const freeRacks = ctx.racks.filter(r => !sellers.some(u => u.rack_code === r.code));
+
+    host.innerHTML =
+      '<main class="page">' +
+        '<div class="page-head">' +
+          '<div><h1>Сотрудники</h1><p>Кто входит на сайт. Продавец видит только свой стеллаж, администратор — всё.</p></div>' +
+          '<div class="page-actions">' +
+            '<button class="btn btn-primary" id="uAdd">' + UI.icon('plus', 15, '#12161F', 2) + '<span>Добавить сотрудника</span></button>' +
+          '</div>' +
+        '</div>' +
+        (STORE.cloud ? '' :
+          '<div class="card flat" style="font-size:13px;color:#8494AC">Демо-режим: учётные записи хранятся только в этом браузере. ' +
+          'С подключённой базой они будут общими для всех устройств.</div>') +
+        (error ? '<div class="card flat" style="font-size:13px;color:var(--red)">' + UI.esc(error) + '</div>' : '') +
+        '<section class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">' +
+          kpi('Всего', list.length) +
+          kpi('Продавцов', sellers.length) +
+          kpi('Администраторов', list.length - sellers.length) +
+          kpi('Стеллажей без продавца', freeRacks.length, freeRacks.length ? 'var(--orange)' : '') +
+        '</section>' +
+        (users === null
+          ? '<div class="empty-state">Загружаю список…</div>'
+          : list.length
+            ? '<div class="grid-wrap"><table class="grid" style="min-width:760px"><thead><tr>' +
+                '<th>Сотрудник</th><th>Логин</th><th>Роль</th><th>Стеллаж</th><th>Последний вход</th><th class="r"></th>' +
+              '</tr></thead><tbody>' + list.map(row).join('') + '</tbody></table></div>'
+            : '<div class="empty-state">Пока никого. Добавьте первого продавца.</div>') +
+      '</main>';
+    bind();
+  }
+
+  function kpi(label, value, color) {
+    return '<div class="card kpi compact"><span class="label">' + label + '</span>' +
+      '<span class="value"' + (color ? ' style="color:' + color + '"' : '') + '>' + value + '</span></div>';
+  }
+
+  function row(u) {
+    const me = u.login === ctx.user.login;
+    return '<tr data-login="' + UI.esc(u.login) + '">' +
+      '<td><div class="prod"><b>' + UI.esc(u.name || u.login) + (me ? ' <span class="pill sm neutral">это вы</span>' : '') +
+        '</b><small>' + UI.esc(u.title || '') + '</small></div></td>' +
+      '<td><span class="sku">' + UI.esc(u.login) + '</span></td>' +
+      '<td>' + (u.role === 'admin'
+        ? '<span class="pill sm low">администратор</span>'
+        : '<span class="pill sm ok">продавец</span>') + '</td>' +
+      '<td style="font-size:13px">' + (u.role === 'admin' ? '<span style="color:#4B5A75">все</span>'
+        : (u.rack_code ? UI.esc(rackLabel(u.rack_code)) : '<span style="color:var(--orange)">не закреплён</span>')) + '</td>' +
+      '<td style="font-size:12px;color:#8494AC">' + (u.last_sign_in_at ? UI.dateTime(u.last_sign_in_at)
+        : (STORE.cloud ? 'ещё не входил' : '—')) + '</td>' +
+      '<td class="r"><div class="row-act">' +
+        '<button class="icon-btn sm" data-act="edit" title="Изменить">' + UI.icon('edit', 14) + '</button>' +
+        '<button class="icon-btn sm" data-act="pass" title="Сменить пароль">' + UI.icon('key', 14) + '</button>' +
+        (me ? '' : '<button class="icon-btn sm danger" data-act="del" title="Удалить">' + UI.icon('trash', 14) + '</button>') +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function bind() {
+    host.querySelector('#uAdd').addEventListener('click', () => editModal(null));
+    const t = host.querySelector('.grid');
+    if (t) t.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const u = (users || []).find(x => x.login === b.closest('tr').dataset.login);
+      if (!u) return;
+      if (b.dataset.act === 'edit') editModal(u);
+      if (b.dataset.act === 'pass') passModal(u);
+      if (b.dataset.act === 'del') removeUser(u);
+    });
+  }
+
+  /* ---------------- помощники ---------------- */
+
+  function genPassword() {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', a = 'abcdefghijkmnpqrstuvwxyz', d = '23456789';
+    const pick = (set, n) => {
+      const buf = new Uint32Array(n);
+      (window.crypto || window.msCrypto).getRandomValues(buf);
+      return Array.from(buf, x => set[x % set.length]).join('');
+    };
+    return pick(A, 1) + pick(a, 4) + '-' + pick(d, 4);
+  }
+
+  function suggestLogin() {
+    const taken = new Set((users || []).map(u => String(u.login).toLowerCase()));
+    for (let n = 1; n < 1000; n++) if (!taken.has('seller' + n)) return 'seller' + n;
+    return '';
+  }
+
+  function rackOptions(current) {
+    const busy = {};
+    (users || []).forEach(u => { if (u.role !== 'admin' && u.rack_code) busy[u.rack_code] = u.name || u.login; });
+    const codes = ctx.racks.map(r => r.code);
+    if (current && codes.indexOf(current) < 0) codes.unshift(current);
+    return '<option value="">— не закреплять —</option>' + codes.map(c => {
+      const r = ctx.racks.find(x => x.code === c);
+      const who = busy[c] && c !== current ? ' — сейчас: ' + busy[c] : '';
+      return '<option value="' + UI.esc(c) + '"' + (c === current ? ' selected' : '') + '>' +
+        UI.esc(c + (r ? ' · ' + r.station : ' (нет стеллажа)') + who) + '</option>';
+    }).join('');
+  }
+
+  function passField(id, value) {
+    return '<div class="field"><label for="' + id + '">Пароль</label>' +
+      '<div class="row" style="gap:8px"><input class="input sm grow mono" id="' + id + '" type="text" autocomplete="new-password" value="' + UI.esc(value) + '">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-gen="' + id + '">Придумать</button></div>' +
+      '<span class="hint">Не короче 6 знаков. Покажем ещё раз после сохранения — чтобы переслать сотруднику.</span></div>';
+  }
+
+  function bindGen(root) {
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-gen]');
+      if (b) root.querySelector('#' + b.dataset.gen).value = genPassword();
+    });
+  }
+
+  async function showCredentials(login, password, name) {
+    const url = location.origin + location.pathname;
+    const text = 'Вход в ' + CFG.texts.brand + (name ? ' для ' + name : '') + '\n' + url + '\nЛогин: ' + login + '\nПароль: ' + password;
+    await UI.modal({
+      title: 'Данные для входа',
+      subtitle: 'Перешлите сотруднику. Пароль в открытом виде больше нигде не показывается.',
+      body: '<div class="card flat mono" style="white-space:pre-wrap;font-size:13px;line-height:1.7;padding:14px 16px" id="credBox">' +
+        UI.esc(text) + '</div>',
+      actions: [
+        { label: 'Закрыть', value: null },
+        {
+          label: 'Скопировать', kind: 'btn-primary',
+          onClick: () => {
+            const done = () => UI.toast('Скопировано', 'ok');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(done, () => UI.toast('Выделите текст и скопируйте вручную', 'err'));
+            } else UI.toast('Выделите текст и скопируйте вручную', 'err');
+            return false;
+          }
+        }
+      ]
+    });
+  }
+
+  /* ---------------- окна ---------------- */
+
+  async function editModal(u) {
+    const isNew = !u;
+    const v = u || { login: suggestLogin(), name: '', title: '', role: 'seller', rack_code: '' };
+    let data = null;
+
+    await UI.modal({
+      title: isNew ? 'Новый сотрудник' : (v.name || v.login),
+      subtitle: isNew ? 'Логин и пароль — для входа на сайт. Продавца закрепите за стеллажом.' : 'Логин: ' + v.login,
+      wide: true,
+      body:
+        '<div class="stack-sm" style="gap:14px">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            UI.field('Имя', 'u-name', 'Алексей П.', 'text', v.name) +
+            UI.field('Должность', 'u-title', 'Продавец', 'text', v.title) +
+          '</div>' +
+          (isNew
+            ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+                UI.field('Логин', 'u-login', 'seller5', 'text', v.login, 'латиница и цифры, например seller5') +
+                passField('u-pass', genPassword()) +
+              '</div>'
+            : '') +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div class="field"><label for="u-role">Роль</label><select class="input sm" id="u-role">' +
+              '<option value="seller"' + (v.role !== 'admin' ? ' selected' : '') + '>Продавец — свой стеллаж</option>' +
+              '<option value="admin"' + (v.role === 'admin' ? ' selected' : '') + '>Администратор — всё</option>' +
+            '</select></div>' +
+            '<div class="field" id="u-rack-box"><label for="u-rack">Стеллаж</label><select class="input sm" id="u-rack">' +
+              rackOptions(v.rack_code || '') + '</select></div>' +
+          '</div>' +
+        '</div>',
+      onOpen: (root) => {
+        bindGen(root);
+        const role = root.querySelector('#u-role');
+        const box = root.querySelector('#u-rack-box');
+        const sync = () => { box.style.visibility = role.value === 'admin' ? 'hidden' : 'visible'; };
+        role.addEventListener('change', sync);
+        sync();
+      },
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: isNew ? 'Создать учётную запись' : 'Сохранить', kind: 'btn-primary',
+          onClick: (root) => {
+            const get = (id) => { const el = root.querySelector('#' + id); return el ? el.value.trim() : ''; };
+            data = {
+              name: get('u-name'), title: get('u-title'), role: get('u-role'), rack: get('u-rack') || null,
+              login: isNew ? get('u-login').toLowerCase() : v.login, password: isNew ? get('u-pass') : ''
+            };
+            if (!data.name) { UI.toast('Укажите имя', 'err'); return false; }
+            if (isNew && !/^[a-z0-9._-]{2,32}$/.test(data.login)) {
+              UI.toast('Логин — латинские буквы, цифры, точка или дефис', 'err'); return false;
+            }
+            if (isNew && data.password.length < 6) { UI.toast('Пароль — не короче 6 знаков', 'err'); return false; }
+            return true;
+          }
+        }
+      ]
+    });
+
+    if (!data) return;
+    try {
+      if (isNew) {
+        const ok = await ctx.act(() => STORE.createUser(data, ctx.user), 'Сотрудник ' + data.login + ' заведён');
+        if (!ok) return;
+        await load(true);
+        await showCredentials(data.login, data.password, data.name);
+      } else {
+        const ok = await ctx.act(() => STORE.updateUser(v.login, data, ctx.user), 'Сохранено');
+        if (ok) await load(true);
+      }
+    } catch (e) { /* сообщение уже показано */ }
+  }
+
+  async function passModal(u) {
+    let pw = null;
+    await UI.modal({
+      title: 'Новый пароль для ' + (u.name || u.login),
+      subtitle: 'Логин: ' + u.login + '. Старый пароль перестанет работать сразу.',
+      body: passField('p-pass', genPassword()),
+      onOpen: (root) => bindGen(root),
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Сменить пароль', kind: 'btn-primary',
+          onClick: (root) => {
+            pw = root.querySelector('#p-pass').value.trim();
+            if (pw.length < 6) { UI.toast('Пароль — не короче 6 знаков', 'err'); pw = null; return false; }
+            return true;
+          }
+        }
+      ]
+    });
+    if (!pw) return;
+    try {
+      const ok = await ctx.act(() => STORE.setPassword(u.login, pw, ctx.user), 'Пароль изменён');
+      if (ok && u.login !== ctx.user.login) await showCredentials(u.login, pw, u.name);
+    } catch (e) { /* сообщение уже показано */ }
+  }
+
+  async function removeUser(u) {
+    const ok = await UI.confirmBox('Удалить учётную запись ' + u.login + '?',
+      (u.name || u.login) + ' больше не сможет войти. Его продажи и движения в журнале останутся.',
+      'Удалить', 'btn-danger');
+    if (!ok) return;
+    try {
+      const ok = await ctx.act(() => STORE.deleteUser(u.login, ctx.user), 'Учётная запись удалена');
+      if (ok) await load(true);
+    } catch (e) { /* сообщение уже показано */ }
+  }
+
+  return { render };
+})();
+
 
 
 /* ============================================================
@@ -5230,7 +6861,7 @@ window.LC_SELLER = (function () {
         '<span style="font-size:12px;font-weight:600;color:var(--green);white-space:nowrap">' +
         UI.esc(CFG.texts.shiftOpen) + '</span></div>'
     });
-    UI.modeBanner();
+    UI.modeBanner(user);
     bind();
     await refresh();
     if (rack) {
