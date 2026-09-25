@@ -407,6 +407,7 @@ select.input { appearance: none; padding-right: 34px;
 .money-grid tr.total td { border-top: 1px solid var(--line-strong, #2A3957); background: rgba(255,255,255,.02); }
 .net-bar { height: 3px; background: #1B2436; border-radius: 2px; margin-top: 5px; overflow: hidden; }
 .net-bar i { display: block; height: 100%; margin-left: auto; border-radius: 2px; }
+.courier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .money-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 1100px) { .money-2col { grid-template-columns: 1fr; } }
 
@@ -1772,9 +1773,9 @@ if (!window.supabase) {
    * «Поставка собрана» — админ отметил, что товар для точки уже собран и едет.
    * Если заявки не было (админ сам увидел пустые позиции), она создаётся.
    */
-  async function markPacked(rackCode, user, note, items) {
+  async function markPacked(rackCode, user, note, items, replace) {
     const now = new Date().toISOString();
-    // что именно собрано: [{ item_id, name, qty }] — продавец увидит это при приёме
+    // что именно собрано: [{ item_id, catalog_id, name, qty }] — при приёме больше этого не примут
     const packed = (items || []).filter(x => x.qty > 0);
     if (packed.length && !note) note = 'собрано: ' + packed.map(x => x.name + ' ×' + x.qty).join('; ');
     if (!cloud) {
@@ -1789,7 +1790,7 @@ if (!window.supabase) {
         };
         st.requests.unshift(req);
       }
-      if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
+      if (req.status === 'packed' && !replace) throw new Error('Поставка уже отмечена как собранная');
       req.status = 'packed';
       req.seen_at = req.seen_at || now;
       req.packed_at = now;
@@ -1813,7 +1814,7 @@ if (!window.supabase) {
       };
       await sbInsert('requests', req);
     }
-    if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
+    if (req.status === 'packed' && !replace) throw new Error('Поставка уже отмечена как собранная');
     await sbUpdate('requests', {
       status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name,
       packed_items: packed
@@ -2255,6 +2256,10 @@ if (!window.supabase) {
     return data;
   }
 
+  // роли: admin — всё; seller — свой стеллаж; courier — сборка и доставка
+  const ROLE_OF = (r) => (r === 'admin' || r === 'courier') ? r : 'seller';
+  const ROLE_TITLE = { admin: 'Администратор', seller: 'Продавец', courier: 'Курьер' };
+
   function checkLogin(login) {
     const l = String(login || '').trim().toLowerCase();
     if (!/^[a-z0-9._-]{2,32}$/.test(l)) throw new Error('Логин — латинские буквы, цифры, точка или дефис, от 2 до 32 знаков');
@@ -2280,9 +2285,9 @@ if (!window.supabase) {
     const password = checkPassword(d.password);
     const name = String(d.name || '').trim();
     if (!name) throw new Error('Укажите имя сотрудника');
-    const role = d.role === 'admin' ? 'admin' : 'seller';
+    const role = ROLE_OF(d.role);
     const rack = role === 'seller' ? (d.rack || null) : null;
-    const title = String(d.title || '').trim() || (role === 'admin' ? 'Администратор' : 'Продавец');
+    const title = String(d.title || '').trim() || ROLE_TITLE[role];
 
     if (!cloud) {
       if (localAccounts().some(a => a.login.toLowerCase() === login)) throw new Error('Логин «' + login + '» уже занят');
@@ -2299,12 +2304,12 @@ if (!window.supabase) {
   }
 
   async function updateUser(login, d, user) {
-    const role = d.role === 'admin' ? 'admin' : 'seller';
+    const role = ROLE_OF(d.role);
     const name = String(d.name || '').trim();
     if (!name) throw new Error('Укажите имя сотрудника');
     if (login === user.login && role !== 'admin') throw new Error('Себе роль администратора снять нельзя');
     const rack = role === 'seller' ? (d.rack || null) : null;
-    const title = String(d.title || '').trim() || (role === 'admin' ? 'Администратор' : 'Продавец');
+    const title = String(d.title || '').trim() || ROLE_TITLE[role];
     if (!cloud) patchLocalAccount(login, { role, name, title, rack });
     else await rpc('admin_update_user', { p_login: login, p_name: name, p_title: title, p_role: role, p_rack: rack });
     await logOp({ type: 'user_edit', user_login: user.login, user_name: user.name,
@@ -2329,6 +2334,43 @@ if (!window.supabase) {
     await logOp({ type: 'user_delete', user_login: user.login, user_name: user.name, note: login });
     if (!cloud) localChanged();
     return true;
+  }
+
+  /* ---------------- склад для курьера ----------------
+     Курьер не видит закупок (там деньги), поэтому склад в штуках
+     считает сама база — функция warehouse_stock(). */
+
+  /** Сколько штук каждой позиции прайса лежит в собранных, но не доставленных поставках. */
+  function reservedFrom(requests, racks, exceptRack) {
+    const cat = {};
+    (racks || []).forEach(r => r.items.forEach(i => { cat[i.id] = i.catalog_id; }));
+    const out = {};
+    (requests || []).forEach(r => {
+      if (r.status !== 'packed' || r.rack_code === exceptRack || !Array.isArray(r.packed_items)) return;
+      r.packed_items.forEach(x => {
+        const cid = x.catalog_id || cat[x.item_id];
+        if (cid) out[cid] = (out[cid] || 0) + (Number(x.qty) || 0);
+      });
+    });
+    return out;
+  }
+
+  /** { qty: {catalog_id: шт на складе} } */
+  async function getStock() {
+    if (!cloud) {
+      const st = readLocal();
+      return { qty: warehouse(st.purchases, st.ops) };
+    }
+    const { data, error } = await sb.rpc('warehouse_stock');
+    if (error) {
+      if (error.code === 'PGRST202' || /could not find the function/i.test(error.message || '')) {
+        throw new Error('В базе нет функции склада. Выполните fix-v8.sql в Supabase → SQL Editor.');
+      }
+      throw new Error(error.message);
+    }
+    const qty = {};
+    (data || []).forEach(r => { qty[r.catalog_id] = Number(r.qty) || 0; });
+    return { qty };
   }
 
   /* ---------------- очистка истории ----------------
@@ -2645,7 +2687,7 @@ if (!window.supabase) {
     createRequest, closeRequest, closeRequests, markRequestsSeen, markPacked,
     addRack, updateRack, addItem, removeItem, setMax, cancelOp,
     adjustItem, importCatalog, importPurchases, deleteOps, editOp, opEffect,
-    loadSettings, settingsReady, clearHistory,
+    loadSettings, settingsReady, clearHistory, getStock, reservedFrom,
     listUsers, createUser, updateUser, setPassword, deleteUser, localAccounts,
     onChange, clearAll, resetDemo: clearAll, uid
   };
@@ -3577,7 +3619,8 @@ window.LC_ADMIN = (function () {
 
     let foot;
     if (packed) {
-      foot = '<span style="font-size:12px;color:var(--green)">Поставка собрана · ' +
+      const inVan = Array.isArray(req.packed_items) ? req.packed_items.reduce((s, x) => s + (Number(x.qty) || 0), 0) : 0;
+      foot = '<span style="font-size:12px;color:var(--green)">Поставка собрана' + (inVan ? ' (' + inVan + ' шт)' : '') + ' · ' +
         UI.dateTime(req.packed_at) + (req.packed_by ? ' · ' + UI.esc(req.packed_by) : '') +
         ' — точка это видит</span>';
     } else if (req) {
@@ -3622,7 +3665,7 @@ window.LC_ADMIN = (function () {
             ? '<button class="btn btn-ghost btn-sm" data-act="audit" data-rack="' + code + '" title="Пересчитать полку и вписать факт">Сверка</button>'
             : '') +
           (packed
-            ? ''
+            ? '<button class="btn btn-ghost btn-sm" data-act="packed" data-rack="' + code + '" title="Поменять, что лежит в сборке">Изменить сборку</button>'
             : '<button class="btn btn-warn btn-sm" data-act="packed" data-rack="' + code + '"' +
               (missing ? '' : ' disabled') + ' title="Отметить, что товар для этой точки собран">' +
               'Поставка собрана</button>') +
@@ -3869,6 +3912,20 @@ window.LC_ADMIN = (function () {
   /** Остаток склада по прайсу: закуплено − отгружено на стеллажи. */
   const stockMap = () => STORE.warehouse(ctx.purchases, ctx.ops);
 
+  /**
+   * Свободно на складе: остаток минус то, что уже собрано для других точек
+   * и лежит в машине (со склада оно спишется, только когда его поставят на полку).
+   * exceptRack — сборку этой точки не вычитаем (её как раз пересобираем).
+   */
+  function availMap(exceptRack) {
+    const st = stockMap();
+    const res = STORE.reservedFrom(ctx.requests, ctx.racks, exceptRack);
+    const out = {};
+    Object.keys(st).forEach(k => { out[k] = st[k]; });
+    Object.keys(res).forEach(k => { out[k] = (out[k] || 0) - res[k]; });
+    return out;
+  }
+
   async function restockRack(code) {
     const rack = ctx.racks.find(r => r.code === code);
     if (!rack) return;
@@ -3878,7 +3935,7 @@ window.LC_ADMIN = (function () {
       subtitle: rack.station + (rack.address ? ' · ' + rack.address : '') +
         ' · поставить можно не больше, чем есть на складе',
       okLabel: 'Пополнить',
-      stock: stockMap()
+      stock: availMap()
     });
     if (!plan) return;
     await act(
@@ -4200,9 +4257,11 @@ window.LC_ADMIN = (function () {
   async function markPacked(code) {
     const r = ctx.racks.find(x => x.code === code);
     if (!r) return;
-    const stock = stockMap();
+    const stock = availMap(code);
     const initial = {};
-    r.items.forEach(i => { initial[i.id] = Math.min(i.max - i.qty, Math.max(0, Math.floor(stock[i.catalog_id] || 0))); });
+    const cur = ctx.requests.find(x => x.rack_code === code && x.status === 'packed');
+    if (cur && Array.isArray(cur.packed_items)) cur.packed_items.forEach(x => { initial[x.item_id] = Number(x.qty) || 0; });
+    else r.items.forEach(i => { initial[i.id] = Math.min(i.max - i.qty, Math.max(0, Math.floor(stock[i.catalog_id] || 0))); });
     const plan = await fillModal({
       rack: r,
       title: 'Собрать поставку для ' + r.code,
@@ -4214,22 +4273,24 @@ window.LC_ADMIN = (function () {
     if (!plan) return;
     const items = plan.map(p => {
       const it = r.items.find(i => i.id === p.item_id);
-      return { item_id: p.item_id, name: it ? it.name : '', qty: p.add };
+      return { item_id: p.item_id, catalog_id: it ? it.catalog_id : null, name: it ? it.name : '', qty: p.add };
     });
-    ctx.act(() => STORE.markPacked(code, ctx.user, null, items),
+    const already = ctx.requests.some(x => x.rack_code === code && x.status === 'packed');
+    ctx.act(() => STORE.markPacked(code, ctx.user, null, items, already),
       'Собрано ' + items.reduce((s, x) => s + x.qty, 0) + ' шт — точка увидит «везём к вам»');
   }
 
   /** Автосборка для маршрута: по каждой точке берём сколько нужно, но не больше склада. */
   function autoPack(racks) {
-    const left = Object.assign({}, stockMap());
-    return racks.map(r => ({
+    const left = Object.assign({}, availMap());
+    const packedNow = new Set(ctx.requests.filter(x => x.status === 'packed').map(x => x.rack_code));
+    return racks.filter(r => !packedNow.has(r.code)).map(r => ({
       code: r.code,
       items: r.items.filter(i => i.max > i.qty).map(i => {
         const have = Math.max(0, Math.floor(left[i.catalog_id] || 0));
         const qty = Math.min(i.max - i.qty, have);
         left[i.catalog_id] = have - qty;
-        return { item_id: i.id, name: i.name, qty };
+        return { item_id: i.id, catalog_id: i.catalog_id, name: i.name, qty };
       }).filter(x => x.qty > 0)
     }));
   }
@@ -4355,7 +4416,7 @@ window.LC_ADMIN = (function () {
             if (max < 1) { UI.toast('Вместимость должна быть больше нуля', 'err'); return false; }
             const r = root.querySelector('input[name="imR"]:checked');
             const reason = r ? r.value : null;
-            const wh = Math.max(0, Math.floor(stockMap()[it.catalog_id] || 0));
+            const wh = Math.max(0, Math.floor(availMap()[it.catalog_id] || 0));
             if (reason === 'restock' && qty - it.qty > wh) {
               UI.toast('На складе только ' + wh + ' шт. Поставьте меньше, внесите закупку или выберите «Сверка».', 'err');
               return false;
@@ -4524,7 +4585,7 @@ window.LC_ADMIN = (function () {
       if (a === 'minus') minusOne(b.dataset.item);
       if (a === 'plus') {
         const it = itemById(b.dataset.item);
-        const wh = it ? Math.floor(stockMap()[it.catalog_id] || 0) : 0;
+        const wh = it ? Math.floor(availMap()[it.catalog_id] || 0) : 0;
         if (it && wh <= 0) {
           UI.toast('На складе нет «' + it.name + '». Внесите закупку — или через ✎ → «Сверка», если канистра на полке уже была.', 'err');
           return;
@@ -6820,7 +6881,8 @@ window.LC_USERS = (function () {
   function draw() {
     const list = (users || []).slice().sort((a, b) =>
       (a.role === 'admin' ? 0 : 1) - (b.role === 'admin' ? 0 : 1) || String(a.login).localeCompare(String(b.login)));
-    const sellers = list.filter(u => u.role !== 'admin');
+    const sellers = list.filter(u => u.role === 'seller' || !u.role);
+    const couriers = list.filter(u => u.role === 'courier');
     const freeRacks = ctx.racks.filter(r => !sellers.some(u => u.rack_code === r.code));
 
     host.innerHTML =
@@ -6838,7 +6900,8 @@ window.LC_USERS = (function () {
         '<section class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">' +
           kpi('Всего', list.length) +
           kpi('Продавцов', sellers.length) +
-          kpi('Администраторов', list.length - sellers.length) +
+          kpi('Курьеров', couriers.length) +
+          kpi('Администраторов', list.filter(u => u.role === 'admin').length) +
           kpi('Стеллажей без продавца', freeRacks.length, freeRacks.length ? 'var(--orange)' : '') +
         '</section>' +
         (users === null
@@ -6865,8 +6928,11 @@ window.LC_USERS = (function () {
       '<td><span class="sku">' + UI.esc(u.login) + '</span></td>' +
       '<td>' + (u.role === 'admin'
         ? '<span class="pill sm low">администратор</span>'
-        : '<span class="pill sm ok">продавец</span>') + '</td>' +
+        : u.role === 'courier'
+          ? '<span class="pill sm neutral" style="color:#7C8CF8">курьер</span>'
+          : '<span class="pill sm ok">продавец</span>') + '</td>' +
       '<td style="font-size:13px">' + (u.role === 'admin' ? '<span style="color:#4B5A75">все</span>'
+        : u.role === 'courier' ? '<span style="color:#4B5A75">все точки · доставка</span>'
         : (u.rack_code ? UI.esc(rackLabel(u.rack_code)) : '<span style="color:var(--orange)">не закреплён</span>')) + '</td>' +
       '<td style="font-size:12px;color:#8494AC">' + (u.last_sign_in_at ? UI.dateTime(u.last_sign_in_at)
         : (STORE.cloud ? 'ещё не входил' : '—')) + '</td>' +
@@ -6893,6 +6959,15 @@ window.LC_USERS = (function () {
   }
 
   /* ---------------- помощники ---------------- */
+
+  const ROLE_HINT = {
+    seller: '<b style="color:#B9C6DA">Продавец</b> видит только свой стеллаж: продаёт, отменяет свою продажу, делает сверку ' +
+      '(только недостачу), отправляет заявку и принимает собранную поставку. Закупок, прибыли и других точек не видит.',
+    courier: '<b style="color:#B9C6DA">Курьер</b> видит все точки, что где кончается, заявки и склад в штуках. ' +
+      'Собирает поставку со склада (не больше, чем есть), везёт и ставит на полку. ' +
+      'Не видит закупочных цен, выручки и чужих операций, не может продавать, списывать и менять прайс.',
+    admin: '<b style="color:#B9C6DA">Администратор</b> может всё: прайс, закупки, деньги, сотрудники, настройки.'
+  };
 
   function genPassword() {
     const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', a = 'abcdefghijkmnpqrstuvwxyz', d = '23456789';
@@ -6987,17 +7062,23 @@ window.LC_USERS = (function () {
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
             '<div class="field"><label for="u-role">Роль</label><select class="input sm" id="u-role">' +
               '<option value="seller"' + (v.role !== 'admin' ? ' selected' : '') + '>Продавец — свой стеллаж</option>' +
+              '<option value="courier"' + (v.role === 'courier' ? ' selected' : '') + '>Курьер — сборка и доставка</option>' +
               '<option value="admin"' + (v.role === 'admin' ? ' selected' : '') + '>Администратор — всё</option>' +
             '</select></div>' +
             '<div class="field" id="u-rack-box"><label for="u-rack">Стеллаж</label><select class="input sm" id="u-rack">' +
               rackOptions(v.rack_code || '') + '</select></div>' +
           '</div>' +
+          '<div id="u-role-hint" class="card flat" style="font-size:12px;color:#8494AC;line-height:1.55;padding:10px 12px"></div>' +
         '</div>',
       onOpen: (root) => {
         bindGen(root);
         const role = root.querySelector('#u-role');
         const box = root.querySelector('#u-rack-box');
-        const sync = () => { box.style.visibility = role.value === 'admin' ? 'hidden' : 'visible'; };
+        const hint = root.querySelector('#u-role-hint');
+        const sync = () => {
+          box.style.visibility = role.value === 'seller' ? 'visible' : 'hidden';
+          if (hint) hint.innerHTML = ROLE_HINT[role.value] || '';
+        };
         role.addEventListener('change', sync);
         sync();
       },
@@ -7719,9 +7800,10 @@ window.LC_SELLER = (function () {
             '<div style="min-width:0"><b>' + UI.esc(s.title) + '</b>' +
             '<small>' + UI.esc(s.sub) + '</small></div></div>';
         })() +
-        '<button class="btn ' + (openRequest && openRequest.status === 'packed' ? 'btn-primary' : 'btn-ghost') +
-          ' btn-block" id="btnDelivery"' + (missing ? '' : ' disabled') + '>' +
-          UI.esc(CFG.texts.deliveryBtn) + '</button>' +
+        (packedItems()
+          ? '<button class="btn btn-primary btn-block" id="btnDelivery">' + UI.esc(CFG.texts.deliveryBtn) + '</button>'
+          : '<button class="btn btn-ghost btn-block" id="btnDelivery" disabled>' + UI.esc(CFG.texts.deliveryBtn) + '</button>' +
+            '<span style="font-size:11px;color:#64748B;text-align:center">Кнопка оживёт, когда администратор соберёт поставку</span>') +
       '</section>' +
 
       '<section class="card flat stack-sm" style="gap:9px">' +
@@ -7790,23 +7872,34 @@ window.LC_SELLER = (function () {
     });
   }
 
+  /** Что администратор собрал для этой точки. null — принимать нечего. */
+  function packedItems() {
+    return openRequest && openRequest.status === 'packed' && Array.isArray(openRequest.packed_items) &&
+      openRequest.packed_items.some(x => Number(x.qty) > 0) ? openRequest.packed_items : null;
+  }
+
   /** Приём поставки — то же окно со счётчиками, что у администратора. */
   async function acceptDelivery() {
     // если администратор отметил, что именно собрал, — подставляем эти цифры и не даём принять больше
-    const packed = openRequest && openRequest.status === 'packed' && Array.isArray(openRequest.packed_items) &&
-      openRequest.packed_items.length ? openRequest.packed_items : null;
+    // Принять можно ТОЛЬКО то, что администратор отметил собранным. Из ниоткуда товар на полку не попадёт:
+    // склад и закупки ведёт администратор, продавец лишь подтверждает, что привезли.
+    const packed = packedItems();
+    if (!packed) {
+      UI.toast(openRequest && openRequest.status === 'packed'
+        ? 'В сборке не указано, что везут. Попросите администратора заново нажать «Поставка собрана».'
+        : 'Принимать нечего: администратор ещё не собрал поставку для вашей точки.', 'err');
+      return;
+    }
     const cap = {};
     if (packed) packed.forEach(x => { cap[x.item_id] = (cap[x.item_id] || 0) + (Number(x.qty) || 0); });
     const plan = await window.LC_ADMIN.fillModal({
       rack,
       title: 'Принять поставку',
-      subtitle: packed
-        ? 'Администратор собрал ' + packed.reduce((s, x) => s + (Number(x.qty) || 0), 0) +
-          ' шт. Проверьте, что привезли, — если меньше, уменьшите число.'
-        : 'Отметьте, сколько канистр реально привезли',
+      subtitle: 'Администратор собрал ' + packed.reduce((s, x) => s + (Number(x.qty) || 0), 0) +
+        ' шт. Проверьте, что привезли, — если меньше, уменьшите число. Больше собранного принять нельзя.',
       okLabel: 'Принял, всё на полке',
-      initial: packed ? cap : null,
-      cap: packed ? cap : null,
+      initial: cap,
+      cap: cap,
       hideCost: true
     });
     if (!plan) return;
@@ -7819,7 +7912,7 @@ window.LC_SELLER = (function () {
   async function auditModal() {
     await UI.modal({
       title: 'Сверка остатков',
-      subtitle: 'Пересчитайте канистры на полке и впишите фактическое количество',
+      subtitle: 'Пересчитайте канистры и впишите, сколько на самом деле. Если канистр БОЛЬШЕ, чем в системе, — скажите администратору.',
       wide: true,
       noFocus: true,
       body: '<div class="stack-sm" style="gap:0">' + rack.items.map(i =>
@@ -7827,7 +7920,7 @@ window.LC_SELLER = (function () {
           '<div class="t"><b>' + UI.esc(i.name) + '</b>' +
             '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) + '</small></div>' +
           '<div class="have">в системе<br><span style="color:#B9C6DA">' + i.qty + ' из ' + i.max + '</span></div>' +
-          UI.stepper(i.id, i.qty, i.max) +
+          UI.stepper(i.id, i.qty, i.qty) +
         '</div>').join('') + '</div>',
       onOpen: (root) => { UI.bindSteppers(root); },
       actions: [
@@ -7950,6 +8043,259 @@ window.LC_SELLER = (function () {
 
 
 /* ============================================================
+   Lube Control — РАБОЧЕЕ МЕСТО КУРЬЕРА
+   Видит все точки и склад в штуках. Собирает поставку (не больше, чем
+   свободно на складе и влезает на полку), везёт и ставит на полку.
+   Денег не видит: ни закупочных цен, ни выручки. Продавать не может.
+   ============================================================ */
+
+window.LC_COURIER = (function () {
+  const CFG = window.LC_CONFIG;
+  const STORE = window.LC_STORE;
+  const UI = window.LC_UI;
+  const $ = (id) => document.getElementById(id);
+
+  let user = null;
+  let racks = [], requests = [], catalog = [];
+  let stock = {};
+  let stockErr = '';
+  let busy = false;
+
+  async function load() {
+    const [r, q, c] = await Promise.all([STORE.getRacks(), STORE.getRequests(true), STORE.getCatalog()]);
+    racks = r; requests = q; catalog = c;
+    try { stock = (await STORE.getStock()).qty; stockErr = ''; }
+    catch (e) { stock = {}; stockErr = e.message; }
+  }
+
+  async function refresh() {
+    try { await load(); render(); }
+    catch (err) { UI.toast('Не удалось обновить данные: ' + err.message, 'err'); }
+  }
+
+  /** Свободно на складе, не считая сборку точки exceptRack. */
+  function free(exceptRack) {
+    const res = STORE.reservedFrom(requests, racks, exceptRack);
+    const out = {};
+    Object.keys(stock).forEach(k => { out[k] = stock[k] - (res[k] || 0); });
+    return out;
+  }
+
+  const packedOf = (code) => requests.find(r => r.rack_code === code && r.status === 'packed') || null;
+  const requestOf = (code) => requests.find(r => r.rack_code === code && r.status !== 'packed') || null;
+  const packedList = (req) => (req && Array.isArray(req.packed_items) ? req.packed_items.filter(x => Number(x.qty) > 0) : []);
+  const mapLink = (r) => 'https://yandex.ru/maps/?text=' + encodeURIComponent([r.address, r.station].filter(Boolean).join(', '));
+
+  /* ---------------- отрисовка ---------------- */
+
+  function render() {
+    const fr = free();
+    const van = racks.map(r => ({ r, req: packedOf(r.code) })).filter(x => x.req && packedList(x.req).length);
+    const todo = racks.map(r => ({
+      r,
+      req: requestOf(r.code),
+      need: r.items.reduce((s, i) => s + (i.max - i.qty), 0),
+      empty: r.items.filter(i => i.qty <= 0).length,
+      st: UI.rackStatus(r)
+    })).filter(x => !packedOf(x.r.code) && (x.req || x.st !== 'ok'))
+      .sort((a, b) => (b.req ? 1 : 0) - (a.req ? 1 : 0) || b.empty - a.empty || b.need - a.need);
+
+    const vanQty = van.reduce((s, x) => s + packedList(x.req).reduce((t, y) => t + (Number(y.qty) || 0), 0), 0);
+    const freeQty = Object.keys(fr).reduce((s, k) => s + Math.max(0, fr[k]), 0);
+
+    // что взять со склада в машину — всё по всем собранным точкам
+    const load = {};
+    van.forEach(x => packedList(x.req).forEach(y => {
+      const k = y.name || y.item_id;
+      load[k] = (load[k] || 0) + (Number(y.qty) || 0);
+    }));
+
+    $('view').innerHTML =
+      '<main class="page">' +
+        '<div class="page-head"><div><h1>Доставка</h1>' +
+          '<p>Соберите поставку со склада, отвезите и поставьте на полку — продавец и администратор увидят сразу.</p></div></div>' +
+        (stockErr ? '<div class="card flat" style="font-size:13px;color:var(--red)">' + UI.esc(stockErr) + '</div>' : '') +
+        '<section class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">' +
+          kpi('В машине', vanQty + '<small> шт</small>', vanQty ? 'var(--amber)' : '') +
+          kpi('Точек отвезти', van.length) +
+          kpi('Ждут сборки', todo.length, todo.length ? 'var(--orange)' : '') +
+          kpi('Свободно на складе', freeQty + '<small> шт</small>', freeQty ? 'var(--green)' : 'var(--red)') +
+        '</section>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Везу — поставить на полку</h2></div>' +
+          (van.length
+            ? '<div class="courier-grid">' + van.map(x => vanCard(x.r, x.req)).join('') + '</div>' +
+              '<details class="card flat" style="font-size:13px"><summary style="cursor:pointer;color:var(--amber)">' +
+                'Что взять со склада — всего ' + vanQty + ' шт</summary><div class="stack-sm" style="gap:5px;margin-top:10px">' +
+                Object.keys(load).sort().map(k => '<div class="row-between"><span>' + UI.esc(k) + '</span><b class="mono">' + load[k] + ' шт</b></div>').join('') +
+              '</div></details>'
+            : '<div class="empty-state" style="padding:22px">Собранных поставок нет. Соберите из списка ниже.</div>') +
+        '</section>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Нужно собрать</h2><span style="font-size:12px;color:#64748B">сначала заявки и пустые полки</span></div>' +
+          (todo.length
+            ? '<div class="courier-grid">' + todo.map(x => todoCard(x, fr)).join('') + '</div>'
+            : '<div class="empty-state" style="padding:22px">Все полки в порядке — везти никуда не нужно.</div>') +
+        '</section>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Склад</h2><span style="font-size:12px;color:#64748B">свободно = на складе минус уже собранное</span></div>' +
+          stockTable(fr) +
+        '</section>' +
+      '</main>';
+  }
+
+  function kpi(label, value, color) {
+    return '<div class="card kpi compact"><span class="label">' + label + '</span>' +
+      '<span class="value"' + (color ? ' style="color:' + color + '"' : '') + '>' + value + '</span></div>';
+  }
+
+  function head(r, pill) {
+    return '<div class="row-between" style="gap:10px;align-items:flex-start">' +
+      '<div class="row" style="gap:10px;min-width:0;align-items:flex-start"><span class="rack-code">' + UI.esc(r.code) + '</span>' +
+        '<div style="min-width:0"><b style="font-size:14px">' + UI.esc(r.station) + '</b>' +
+          (r.address ? '<div style="font-size:12px;color:#8494AC">' + UI.esc(r.address) + ' · ' +
+            '<a href="' + mapLink(r) + '" target="_blank" rel="noopener" style="color:var(--amber)">на карте</a></div>' : '') +
+          (r.operator ? '<div style="font-size:11px;color:#64748B">продавец: ' + UI.esc(r.operator) + '</div>' : '') +
+        '</div></div>' + (pill || '') + '</div>';
+  }
+
+  function vanCard(r, req) {
+    const list = packedList(req);
+    return '<article class="card stack-sm" style="gap:12px;border-color:rgba(242,183,5,.35)">' +
+      head(r, '<span class="pill sm ok">в машине</span>') +
+      '<div class="stack-sm" style="gap:5px">' + list.map(x =>
+        '<div class="row-between" style="font-size:13px"><span>' + UI.esc(x.name || '—') + '</span><b class="mono">' + x.qty + ' шт</b></div>').join('') +
+      '</div>' +
+      '<div style="font-size:11px;color:#64748B">Собрано ' + UI.ago(req.packed_at) + (req.packed_by ? ' · ' + UI.esc(req.packed_by) : '') + '</div>' +
+      '<div class="row" style="gap:8px">' +
+        '<button class="btn btn-ghost btn-sm" data-act="pack" data-rack="' + UI.esc(r.code) + '">Изменить сборку</button>' +
+        '<button class="btn btn-primary btn-sm grow" data-act="deliver" data-rack="' + UI.esc(r.code) + '">Поставил на полку</button>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function todoCard(x, fr) {
+    const r = x.r;
+    const rows = r.items.filter(i => i.max > i.qty);
+    const canAny = rows.some(i => (fr[i.catalog_id] || 0) > 0);
+    return '<article class="card stack-sm" style="gap:12px">' +
+      head(r, x.req ? '<span class="pill sm empty">заявка</span>' : '<span class="pill sm ' + x.st + '">' + UI.RACK_LABEL[x.st] + '</span>') +
+      (x.req && x.req.note ? '<div style="font-size:12px;color:#B9C6DA">«' + UI.esc(x.req.note) + '»</div>' : '') +
+      '<div class="stack-sm" style="gap:5px">' + rows.map(i => {
+        const f = Math.max(0, fr[i.catalog_id] || 0);
+        return '<div class="row-between" style="font-size:13px;gap:10px"><span class="ellipsis">' + UI.esc(i.name) +
+          ' <small style="color:#64748B">' + i.qty + '/' + i.max + '</small></span>' +
+          '<span class="mono" style="white-space:nowrap">+' + (i.max - i.qty) +
+            ' <small style="color:' + (f ? '#64748B' : 'var(--red)') + '">склад ' + f + '</small></span></div>';
+      }).join('') + '</div>' +
+      '<button class="btn ' + (canAny ? 'btn-warn' : 'btn-ghost') + ' btn-sm btn-block" data-act="pack" data-rack="' + UI.esc(r.code) + '"' +
+        (canAny ? '' : ' disabled') + '>' + (canAny ? 'Собрать поставку' : 'На складе нет нужного') + '</button>' +
+    '</article>';
+  }
+
+  function stockTable(fr) {
+    const res = STORE.reservedFrom(requests, racks);
+    const rows = catalog.filter(c => !c.archived && ((stock[c.id] || 0) > 0 || (res[c.id] || 0) > 0))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!rows.length) return '<div class="empty-state" style="padding:22px">Склад пустой.</div>';
+    return '<div class="grid-wrap"><table class="grid" style="min-width:520px"><thead><tr>' +
+      '<th>Товар</th><th>Объём</th><th class="r">На складе</th><th class="r">Собрано</th><th class="r">Свободно</th>' +
+      '</tr></thead><tbody>' + rows.map(c =>
+        '<tr><td><div class="prod"><b>' + UI.esc(c.name) + '</b><small>' + UI.esc(c.brand || '') + '</small></div></td>' +
+        '<td>' + UI.esc(c.volume || '—') + '</td>' +
+        '<td class="r">' + Math.max(0, stock[c.id] || 0) + '</td>' +
+        '<td class="r" style="color:var(--amber)">' + (res[c.id] || '—') + '</td>' +
+        '<td class="r"><b style="color:' + ((fr[c.id] || 0) > 0 ? 'var(--green)' : '#4B5A75') + '">' + Math.max(0, fr[c.id] || 0) + '</b></td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+
+  /* ---------------- действия ---------------- */
+
+  async function act(fn, okText) {
+    if (busy) return;
+    busy = true;
+    try {
+      const res = await fn();
+      await refresh();
+      if (okText) UI.toast(typeof okText === 'function' ? okText(res) : okText, 'ok');
+    } catch (err) {
+      UI.toast(err.message || 'Не получилось', 'err');
+    } finally { busy = false; }
+  }
+
+  async function pack(code) {
+    const r = racks.find(x => x.code === code);
+    if (!r) return;
+    const cur = packedOf(code);
+    const avail = free(code);
+    const initial = {};
+    if (cur) packedList(cur).forEach(x => { initial[x.item_id] = Number(x.qty) || 0; });
+    else r.items.forEach(i => { initial[i.id] = Math.min(i.max - i.qty, Math.max(0, avail[i.catalog_id] || 0)); });
+    const plan = await window.LC_ADMIN.fillModal({
+      rack: r,
+      title: (cur ? 'Изменить сборку для ' : 'Собрать поставку для ') + r.code,
+      subtitle: r.station + ' · положите в машину и отметьте, сколько взяли. Больше, чем свободно на складе, собрать нельзя.',
+      okLabel: 'Собрано, везу',
+      stock: avail, initial, hideCost: true
+    });
+    if (!plan) return;
+    const items = plan.map(p => {
+      const it = r.items.find(i => i.id === p.item_id);
+      return { item_id: p.item_id, catalog_id: it ? it.catalog_id : null, name: it ? it.name : '', qty: p.add };
+    });
+    await act(() => STORE.markPacked(code, user, null, items, !!cur),
+      'Собрано ' + items.reduce((s, x) => s + x.qty, 0) + ' шт для ' + code + ' — продавец видит «везём к вам»');
+  }
+
+  async function deliver(code) {
+    const r = racks.find(x => x.code === code);
+    const req = packedOf(code);
+    if (!r || !req) return;
+    const cap = {};
+    packedList(req).forEach(x => { cap[x.item_id] = (cap[x.item_id] || 0) + (Number(x.qty) || 0); });
+    const plan = await window.LC_ADMIN.fillModal({
+      rack: r,
+      title: 'Поставить на полку · ' + r.code,
+      subtitle: r.station + ' · отметьте, сколько реально поставили. Не поместилось или разбилось — уменьшите число.',
+      okLabel: 'Поставил на полку',
+      initial: cap, cap, hideCost: true
+    });
+    if (!plan) return;
+    await act(() => STORE.restock(code, plan, { type: 'delivery', user_login: user.login, user_name: user.name, note: 'доставил курьер' }),
+      (res) => 'На полке ' + code + ': +' + res.qty + ' шт');
+  }
+
+  function bind() {
+    $('view').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      if (b.dataset.act === 'pack') pack(b.dataset.rack);
+      if (b.dataset.act === 'deliver') deliver(b.dataset.rack);
+    });
+  }
+
+  async function mount(currentUser) {
+    user = currentUser;
+    UI.applyTheme();
+    document.title = 'Доставка — ' + CFG.texts.brand;
+    UI.renderTopbar($('topbar'), user, {
+      right: '<span class="pill sm neutral" style="color:#7C8CF8">курьер</span>'
+    });
+    UI.modeBanner(user);
+    bind();
+    await refresh();
+    STORE.onChange(refresh);
+  }
+
+  return { mount };
+})();
+
+
+
+/* ============================================================
    Lube Control — переключение экранов
    ============================================================ */
 
@@ -8024,6 +8370,7 @@ window.LC_SELLER = (function () {
     shell.classList.remove('hidden');
     pwInput.value = '';
     if (user.role === 'admin') window.LC_ADMIN.mount(user);
+    else if (user.role === 'courier') window.LC_COURIER.mount(user);
     else window.LC_SELLER.mount(user);
   }
 
