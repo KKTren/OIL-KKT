@@ -359,6 +359,8 @@ select.input { appearance: none; padding-right: 34px;
 
 /* ---------- Выбор позиции из прайса ---------- */
 
+.add-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 800px) { .add-grid { grid-template-columns: 1fr; } }
 .picker { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
 .pick {
   display: flex; align-items: center; gap: 12px;
@@ -390,6 +392,23 @@ select.input { appearance: none; padding-right: 34px;
 }
 .modal.wide { max-width: 640px; }
 .modal.xwide { max-width: 1080px; }
+
+/* раздел «Деньги» */
+.money-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.money-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1180px) { .money-row, .money-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .money-row, .money-row.four { grid-template-columns: 1fr; } }
+.money-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; }
+.money-card .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #8494AC; font-weight: 600; }
+.money-val { font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
+.money-exp { font-size: 12px; color: #8494AC; line-height: 1.45; }
+.money-op { position: absolute; top: 12px; right: 14px; font-family: var(--mono); font-size: 18px; color: #4B5A75; }
+.money-grid td.r, .money-grid th.r { white-space: nowrap; }
+.money-grid tr.total td { border-top: 1px solid var(--line-strong, #2A3957); background: rgba(255,255,255,.02); }
+.net-bar { height: 3px; background: #1B2436; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+.net-bar i { display: block; height: 100%; margin-left: auto; border-radius: 2px; }
+.money-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 1100px) { .money-2col { grid-template-columns: 1fr; } }
 
 /* загрузка из файла */
 .imp-drop {
@@ -651,7 +670,15 @@ select.input { appearance: none; padding-right: 34px;
 .good .title small { font-size: 11px; color: var(--muted-2); }
 .good .count { font-family: var(--mono); font-size: 19px; font-weight: 600; line-height: 1; }
 .good .count small { font-size: 13px; color: var(--dimmer); }
-.good .btn-lg { height: 38px; font-size: 13px; border-radius: 9px; }
+.good .btn-lg { height: 40px; font-size: 13px; border-radius: 9px; }
+.good-price {
+  font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1.05;
+  color: var(--amber); letter-spacing: -0.01em;
+  padding: 8px 10px; border-radius: 9px; background: rgba(242,183,5,0.08); border: 1px solid rgba(242,183,5,0.22);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.good-price small { font-family: var(--sans, inherit); font-size: 11px; font-weight: 400; color: #8A7A46; }
+.good-price.dim { color: #8494AC; background: transparent; border-color: var(--line); }
 
 .shift-card { background: linear-gradient(180deg, #1A1608 0%, #111A2C 62%); border-color: #33290C; }
 .shift-card .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #8A7A46; font-weight: 600; }
@@ -956,6 +983,20 @@ if (!window.supabase) {
   }
   window.LC_FLATTEN = flatten;
   flatten();
+
+  /**
+   * Пересобрать настройки «на месте»: config.js + слой layer (общие настройки из базы).
+   * Модули держат ссылку на объект LC_CONFIG, поэтому объект не заменяем, а переписываем.
+   * Адрес базы и ключ всегда берутся из config.js.
+   */
+  window.LC_REBUILD = function (layer) {
+    const C = window.LC_CONFIG;
+    const keep = { supabaseUrl: C.supabaseUrl, supabaseAnonKey: C.supabaseAnonKey, emailDomain: C.emailDomain };
+    const fresh = merge(clone(window.LC_FILE), layer || {});
+    Object.keys(C).forEach(k => { delete C[k]; });
+    Object.assign(C, fresh, keep);
+    flatten();
+  };
 })();
 
 
@@ -1337,8 +1378,14 @@ if (!window.supabase) {
         .sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
           String(b.created_at).localeCompare(String(a.created_at)));
     }
-    return await sbSelect('purchases',
-      q => q.order('date', { ascending: false }).order('created_at', { ascending: false }));
+    const out = [];
+    for (let from = 0; from < 100000; from += 1000) {
+      const part = await sbSelect('purchases',
+        q => q.order('date', { ascending: false }).order('created_at', { ascending: false }).range(from, from + 999));
+      part.forEach(r => out.push(r));
+      if (part.length < 1000) break;
+    }
+    return out;
   }
 
   function purchaseRow(data, cat, user) {
@@ -1486,13 +1533,20 @@ if (!window.supabase) {
       rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
       return (o.limit ? rows.slice(0, o.limit) : rows).map(normalizeOp);
     }
-    let q = sb.from('ops').select('*').order('created_at', { ascending: false });
-    if (o.rack) q = q.eq('rack_code', o.rack);
-    if (o.since) q = q.gte('created_at', o.since);
-    if (o.limit) q = q.limit(o.limit);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data || []).map(normalizeOp);
+    // Supabase отдаёт не больше 1000 строк за запрос — забираем страницами
+    const limit = o.limit || 50000;
+    const out = [];
+    for (let from = 0; from < limit; from += 1000) {
+      let q = sb.from('ops').select('*').order('created_at', { ascending: false });
+      if (o.rack) q = q.eq('rack_code', o.rack);
+      if (o.since) q = q.gte('created_at', o.since);
+      const to = Math.min(from + 1000, limit) - 1;
+      const { data, error } = await q.range(from, to);
+      if (error) throw error;
+      (data || []).forEach(r => out.push(r));
+      if (!data || data.length < to - from + 1) break;
+    }
+    return out.map(normalizeOp);
   }
 
   /** activeOnly — только незакрытые: ждут отгрузки или уже собраны. */
@@ -1718,8 +1772,11 @@ if (!window.supabase) {
    * «Поставка собрана» — админ отметил, что товар для точки уже собран и едет.
    * Если заявки не было (админ сам увидел пустые позиции), она создаётся.
    */
-  async function markPacked(rackCode, user, note) {
+  async function markPacked(rackCode, user, note, items) {
     const now = new Date().toISOString();
+    // что именно собрано: [{ item_id, name, qty }] — продавец увидит это при приёме
+    const packed = (items || []).filter(x => x.qty > 0);
+    if (packed.length && !note) note = 'собрано: ' + packed.map(x => x.name + ' ×' + x.qty).join('; ');
     if (!cloud) {
       const st = readLocal();
       let req = st.requests.find(r => r.rack_code === rackCode && r.status !== 'done');
@@ -1737,6 +1794,7 @@ if (!window.supabase) {
       req.seen_at = req.seen_at || now;
       req.packed_at = now;
       req.packed_by = user.name;
+      req.packed_items = packed;
       writeLocal(st);
       await logOp({ rack_code: rackCode, type: 'packed', note: note || 'поставка собрана',
         user_login: user.login, user_name: user.name });
@@ -1757,7 +1815,8 @@ if (!window.supabase) {
     }
     if (req.status === 'packed') throw new Error('Поставка уже отмечена как собранная');
     await sbUpdate('requests', {
-      status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name
+      status: 'packed', seen_at: req.seen_at || now, packed_at: now, packed_by: user.name,
+      packed_items: packed
     }, q => q.eq('id', req.id));
     await logOp({ rack_code: rackCode, type: 'packed', note: note || 'поставка собрана',
       user_login: user.login, user_name: user.name });
@@ -2272,12 +2331,264 @@ if (!window.supabase) {
     return true;
   }
 
+  /* ---------------- очистка истории ----------------
+     what = { purchases, ops, requests, shelves }:
+       purchases — все закупки (склад обнулится)
+       ops       — весь журнал движений (продажи, пополнения, правки)
+       requests  — заявки и отметки «поставка собрана»
+       shelves   — обнулить остатки на всех стеллажах (сами стеллажи и позиции остаются)
+     Прайс, стеллажи и сотрудники не трогаются никогда. */
+
+  async function wipe(table) {
+    const before = await sb.from(table).select('id', { count: 'exact', head: true });
+    if (before.error) { if (missingTable(before.error)) return 0; throw before.error; }
+    if (!before.count) return 0;
+    const { error } = await sb.from(table).delete().not('id', 'is', null);
+    if (error) throw (isRls(error) ? rlsError(table) : error);
+    const after = await sb.from(table).select('id', { count: 'exact', head: true });
+    if (after.count) {
+      throw new Error('База не дала очистить «' + table + '» (осталось ' + after.count + ' строк). ' +
+        'Выполните fix-v7.sql в Supabase → SQL Editor.');
+    }
+    return before.count;
+  }
+
+  async function clearHistory(what, user) {
+    const w = what || {};
+    const res = { purchases: 0, ops: 0, requests: 0, shelves: 0 };
+    if (!cloud) {
+      const st = readLocal();
+      if (w.purchases) { res.purchases = st.purchases.length; st.purchases = []; }
+      if (w.ops) { res.ops = st.ops.length; st.ops = []; }
+      if (w.requests) { res.requests = st.requests.length; st.requests = []; }
+      if (w.shelves) st.items.forEach(i => { if (i.qty) { res.shelves += i.qty; i.qty = 0; } });
+      writeLocal(st);
+    } else {
+      if (w.ops) res.ops = await wipe('ops');
+      if (w.purchases) res.purchases = await wipe('purchases');
+      if (w.requests) res.requests = await wipe('requests');
+      if (w.shelves) {
+        const { data: items } = await sb.from('items').select('id,qty').gt('qty', 0);
+        res.shelves = (items || []).reduce((s, i) => s + i.qty, 0);
+        if ((items || []).length) await sbUpdate('items', { qty: 0 }, q => q.gt('qty', 0));
+      }
+    }
+    const parts = [];
+    if (w.purchases) parts.push('закупки: ' + res.purchases);
+    if (w.ops) parts.push('движения: ' + res.ops);
+    if (w.requests) parts.push('заявки: ' + res.requests);
+    if (w.shelves) parts.push('обнулено на полках: ' + res.shelves + ' шт');
+    await logOp({ type: 'history_clear', user_login: user.login, user_name: user.name,
+      note: 'история очищена — ' + parts.join(', ') });
+    if (!cloud) localChanged();
+    return res;
+  }
+
+  /* ---------------- общие настройки ----------------
+     Раньше правки из «Настроек» жили только в браузере администратора:
+     он ставил бонус 50 %, а продавцы видели 10 % из config.js.
+     Теперь в общей базе настройки лежат в таблице app_settings и действуют у всех. */
+
+  let shared = null;            // null — ещё не загружали или таблицы нет
+  let settingsTable = true;
+  let saveTimer = null;
+  const ROOT_KEYS = ['supabaseUrl', 'supabaseAnonKey', 'emailDomain'];
+
+  function stripRoot(obj) {
+    const o = JSON.parse(JSON.stringify(obj || {}));
+    ROOT_KEYS.forEach(k => { delete o[k]; });
+    return o;
+  }
+
+  function saveShared() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      let error = null;
+      try {
+        const res = await sb.from('app_settings')
+          .upsert({ id: 'main', data: shared || {}, updated_at: new Date().toISOString() });
+        error = res.error;
+        if (error && missingTable(error)) { settingsTable = false; error = new Error('В базе нет таблицы app_settings. Выполните fix-v7.sql.'); }
+        else if (error && isRls(error)) error = new Error('База не дала сохранить настройки — нужна роль администратора.');
+      } catch (e) { error = e; }
+      window.dispatchEvent(new CustomEvent('lc-settings-saved', { detail: { error: error ? (error.message || String(error)) : null } }));
+    }, 600);
+  }
+
+  /** Загрузить общие настройки. user — если это админ, переносим его старые правки из браузера. */
+  async function loadSettings(user) {
+    if (!cloud) return;
+    try {
+      const { data, error } = await sb.from('app_settings').select('data').eq('id', 'main').maybeSingle();
+      if (error) { if (missingTable(error)) settingsTable = false; return; }
+      shared = (data && data.data) || {};
+      const local = stripRoot(window.LC_OVERRIDES.local.read());
+      if (user && user.role === 'admin' && !Object.keys(shared).length && Object.keys(local).length) {
+        shared = local;               // перенос правок, которые раньше жили только в этом браузере
+        saveShared();
+      }
+      window.LC_REBUILD(shared);
+    } catch (e) { /* без общих настроек работаем на config.js */ }
+  }
+
+  // В общей базе панель «Настройки» пишет не в браузер, а в app_settings
+  if (cloud) {
+    const local = window.LC_OVERRIDES;
+    window.LC_OVERRIDES = {
+      local,
+      shared: true,
+      read: () => JSON.parse(JSON.stringify(shared || {})),
+      write: (obj) => { shared = stripRoot(obj); saveShared(); return true; },
+      clear: async () => {
+        shared = {};
+        clearTimeout(saveTimer);
+        await sb.from('app_settings').upsert({ id: 'main', data: {}, updated_at: new Date().toISOString() });
+      }
+    };
+  } else {
+    window.LC_OVERRIDES.local = window.LC_OVERRIDES;
+  }
+  const settingsReady = () => cloud && settingsTable;
+
+  /* ---------------- правка истории (только администратор) ----------------
+     Запись журнала можно удалить или исправить. По желанию остаток на полке
+     возвращается так, будто этой операции (или её старого количества) не было.
+     Сами удаления и правки тоже пишутся в журнал — чтобы было видно, кто и что менял. */
+
+  const EFFECT = { sale: -1, restock: 1, delivery: 1, cancel: 1, unload: -1, writeoff: -1 };
+
+  /** На сколько штук эта запись изменила остаток на полке. */
+  function opEffect(o) {
+    if (!o || o.cancelled || !o.item_id) return 0;
+    if (o.type === 'audit') {
+      const m = /излишек \+(\d+)|недостача -(\d+)/.exec(o.note || '');
+      if (!m) return 0;
+      return m[1] ? Number(m[1]) : -Number(m[2]);
+    }
+    const sign = EFFECT[o.type];
+    return sign ? sign * (Number(o.qty) || 0) : 0;
+  }
+
+  /** Сдвинуть остаток позиции без записи в журнал. null — позиции уже нет на стеллаже. */
+  async function shiftItem(itemId, delta) {
+    if (!delta) return 0;
+    if (!cloud) {
+      const st = readLocal();
+      const it = st.items.find(i => i.id === itemId);
+      if (!it) return null;
+      const next = Math.max(0, Math.min(it.max, it.qty + delta));
+      it.qty = next;
+      writeLocal(st);
+      return next;
+    }
+    const { data: it } = await sb.from('items').select('*').eq('id', itemId).maybeSingle();
+    if (!it) return null;
+    const next = Math.max(0, Math.min(it.max, it.qty + delta));
+    await sbUpdate('items', { qty: next }, q => q.eq('id', itemId));
+    return next;
+  }
+
+  async function findOps(ids) {
+    const want = new Set(ids);
+    const all = await getOps({ limit: 5000 });
+    return all.filter(o => want.has(o.id));
+  }
+
+  /** Удалить записи журнала. revert — вернуть остатки на полках. */
+  async function deleteOps(ids, revert, user) {
+    const list = await findOps(ids || []);
+    if (!list.length) throw new Error('Записи не найдены — возможно, их уже удалили');
+
+    let shifted = 0, gone = 0;
+    if (revert) {
+      for (const o of list) {
+        const e = opEffect(o);
+        if (!e) continue;
+        const r = await shiftItem(o.item_id, -e);
+        if (r === null) gone++; else shifted++;
+      }
+    }
+
+    const idList = list.map(o => o.id);
+    if (!cloud) {
+      const st = readLocal();
+      const del = new Set(idList);
+      st.ops = st.ops.filter(o => !del.has(o.id));
+      writeLocal(st);
+    } else {
+      for (let i = 0; i < idList.length; i += 100) {
+        const part = idList.slice(i, i + 100);
+        const { data, error } = await sb.from('ops').delete().in('id', part).select('id');
+        if (error) throw (isRls(error) ? rlsError('ops') : error);
+        if ((data || []).length < part.length) {
+          throw new Error('База не дала удалить записи журнала. Выполните fix-v6.sql в Supabase → SQL Editor.');
+        }
+      }
+    }
+
+    const names = list.slice(0, 3).map(o => (UI_OP_LABEL(o.type)) + (o.item_name ? ' ' + o.item_name : '') + (o.qty ? ' ' + o.qty + ' шт' : ''));
+    await logOp({ type: 'op_delete', user_login: user.login, user_name: user.name, qty: list.length,
+      note: 'удалено записей: ' + list.length + ' — ' + names.join('; ') + (list.length > 3 ? '…' : '') +
+        (revert && shifted ? ' · остатки возвращены' : '') });
+    if (!cloud) localChanged();
+    return { count: list.length, shifted, gone };
+  }
+
+  /** Исправить запись: количество, цену (у продажи), комментарий. */
+  async function editOp(id, data, user) {
+    const op = (await findOps([id]))[0];
+    if (!op) throw new Error('Запись не найдена');
+    const patch = { note: String(data.note == null ? op.note || '' : data.note).trim(), type: op.type };
+    const qtyEditable = EFFECT[op.type] && !op.cancelled && op.item_id;
+    let shift = 0;
+
+    if (qtyEditable && data.qty !== undefined) {
+      const qty = Math.round(Number(data.qty) || 0);
+      if (qty < 1) throw new Error('Количество не меньше 1. Если операции не было — удалите запись.');
+      const price = op.type === 'sale' && data.price !== undefined ? Math.max(0, Number(data.price) || 0) : Number(op.price) || 0;
+      const cost = Number(op.cost) || 0;
+      patch.qty = qty;
+      patch.price = price;
+      patch.amount = qty * (op.type === 'sale' ? price : cost);
+      patch.margin = op.type === 'sale' ? qty * (price - cost) : 0;
+      if (data.revert) shift = opEffect(Object.assign({}, op, { qty })) - opEffect(op);
+    }
+
+    let shifted = null;
+    if (shift) shifted = await shiftItem(op.item_id, shift);
+
+    if (!cloud) {
+      const st = readLocal();
+      const row = st.ops.find(o => o.id === id);
+      if (row) Object.assign(row, patch);
+      writeLocal(st);
+    } else {
+      await sbUpdate('ops', patch, q => q.eq('id', id));
+    }
+
+    const was = UI_OP_LABEL(op.type) + (op.item_name ? ' ' + op.item_name : '');
+    await logOp({ type: 'op_edit', user_login: user.login, user_name: user.name, rack_code: '',
+      item_name: op.item_name || '', brand: op.brand || '', sku: op.sku || '',
+      note: was + (patch.qty !== undefined && patch.qty !== op.qty ? ' · ' + op.qty + ' → ' + patch.qty + ' шт' : '') +
+        (patch.price !== undefined && op.type === 'sale' && patch.price !== Number(op.price) ? ' · цена ' + op.price + ' → ' + patch.price : '') +
+        (shift ? ' · полка ' + (shift > 0 ? '+' : '') + shift : '') });
+    if (!cloud) localChanged();
+    return { shifted, shift };
+  }
+
+  // подпись типа операции для журнала (UI-модуль к моменту вызова уже загружен)
+  function UI_OP_LABEL(type) {
+    return window.LC_UI ? window.LC_UI.opInfo(type).label : type;
+  }
+
   /* ---------------- подписка на изменения ---------------- */
 
   function onChange(fn) {
     listeners.push(fn);
     if (cloud && !onChange._sub) {
-      const bump = () => listeners.forEach(f => f());
+      // при массовых изменениях (загрузка файла, очистка) событий сотни — перерисовываемся один раз
+      let t = null;
+      const bump = () => { clearTimeout(t); t = setTimeout(() => listeners.forEach(f => f()), 500); };
       onChange._sub = sb.channel('lc-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, bump)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'ops' }, bump)
@@ -2333,7 +2644,8 @@ if (!window.supabase) {
     changeQty, setQty, restock, restockAll, logOp,
     createRequest, closeRequest, closeRequests, markRequestsSeen, markPacked,
     addRack, updateRack, addItem, removeItem, setMax, cancelOp,
-    adjustItem, importCatalog, importPurchases,
+    adjustItem, importCatalog, importPurchases, deleteOps, editOp, opEffect,
+    loadSettings, settingsReady, clearHistory,
     listUsers, createUser, updateUser, setPassword, deleteUser, localAccounts,
     onChange, clearAll, resetDemo: clearAll, uid
   };
@@ -2464,7 +2776,10 @@ if (!window.supabase) {
     user_add:      { label: 'Новый сотрудник',   sign: 0,  color: '#3DDC84', group: 'users' },
     user_edit:     { label: 'Правка сотрудника', sign: 0,  color: '#8494AC', group: 'users' },
     user_password: { label: 'Смена пароля',      sign: 0,  color: '#8494AC', group: 'users' },
-    user_delete:   { label: 'Сотрудник удалён',  sign: 0,  color: '#FF5A5F', group: 'users' }
+    user_delete:   { label: 'Сотрудник удалён',  sign: 0,  color: '#FF5A5F', group: 'users' },
+    op_delete:     { label: 'История: удалено',  sign: 0,  color: '#FF5A5F', group: 'history' },
+    op_edit:       { label: 'История: исправлено', sign: 0, color: '#8494AC', group: 'history' },
+    history_clear: { label: 'История очищена',   sign: 0,  color: '#FF5A5F', group: 'history' }
   };
   const opInfo = (type) => OPS[type] || { label: type, sign: 0, color: '#8494AC', group: 'setup' };
 
@@ -2996,10 +3311,10 @@ window.LC_ADMIN = (function () {
   /* ---------------- загрузка ---------------- */
 
   async function load() {
-    const since = new Date(Date.now() - 180 * 864e5).toISOString();
+    // журнал целиком: по нему считается склад и деньги (Supabase отдаём страницами)
     const [racks, ops, requests, catalog, purchases] = await Promise.all([
       STORE.getRacks(),
-      STORE.getOps({ since, limit: 4000 }),
+      STORE.getOps({ limit: 50000 }),
       STORE.getRequests(true),
       STORE.getCatalog(),
       STORE.getPurchases()
@@ -3074,6 +3389,7 @@ window.LC_ADMIN = (function () {
 
   const navItems = () => [
     { key: 'racks', label: 'Стеллажи', active: ctx.page === 'racks' },
+    { key: 'money', label: 'Деньги', active: ctx.page === 'money' },
     { key: 'price', label: 'Прайс', active: ctx.page === 'price' },
     { key: 'buys', label: 'Закупки', active: ctx.page === 'buys' },
     { key: 'moves', label: 'Движения', active: ctx.page === 'moves' },
@@ -3106,6 +3422,7 @@ window.LC_ADMIN = (function () {
     if (ctx.page === 'buys') { window.LC_BUYS.render($('view'), ctx); return; }
     if (ctx.page === 'moves') { window.LC_MOVES.render($('view'), ctx); return; }
     if (ctx.page === 'users') { window.LC_USERS.render($('view'), ctx); return; }
+    if (ctx.page === 'money') { window.LC_MONEY.render($('view'), ctx); return; }
     if (ctx.page === 'settings') { window.LC_SETTINGS.render($('view'), ctx); return; }
     renderRacksPage();
   }
@@ -3447,13 +3764,32 @@ window.LC_ADMIN = (function () {
   }
 
   /**
-   * Общее окно пополнения — им же пользуется продавец («Принять поставку»).
-   * opts: { rack, title, subtitle, okLabel, opType, user }
+   * Общее окно «сколько штук» — пополнение, сборка поставки, приём поставки у продавца.
+   * opts: { rack, title, subtitle, okLabel,
+   *         stock   — { catalog_id: шт } остаток склада; не передан — склад не проверяем,
+   *         initial — { item_id: шт } что подставить сразу,
+   *         cap     — { item_id: шт } больше этого поставить нельзя (например, сколько собрано) }
+   * Возвращает [{ item_id, add }] или null.
    */
   async function fillModal(opts) {
     const rack = opts.rack;
-    const rows = rack.items.filter(i => i.max > i.qty);
-    if (!rows.length) { UI.toast('Стеллаж уже полный', 'err'); return null; }
+    const stock = opts.stock || null;
+    const initial = opts.initial || {};
+    const cap = opts.cap || null;
+    const showCost = !opts.hideCost;      // продавцу закупочные цены не показываем
+
+    const rows = rack.items.filter(i => i.max > i.qty).map(i => {
+      const room = i.max - i.qty;
+      const wh = stock ? Math.max(0, Math.floor(stock[i.catalog_id] || 0)) : null;
+      let lim = room;
+      if (wh !== null) lim = Math.min(lim, wh);
+      if (cap) lim = Math.min(lim, Math.max(0, cap[i.id] || 0));
+      return { i, room, wh, lim, init: Math.max(0, Math.min(lim, initial[i.id] || 0)) };
+    }).filter(r => !cap || r.lim > 0 || (cap[r.i.id] || 0) > 0);
+
+    if (!rows.length) { UI.toast(cap ? 'В сборке ничего нет' : 'Стеллаж уже полный', 'err'); return null; }
+    const anything = rows.some(r => r.lim > 0);
+    const fillLabel = stock ? 'Взять всё, что есть на складе' : (cap ? 'Как в сборке' : 'Заполнить всё до максимума');
 
     let applied = null;
 
@@ -3463,16 +3799,29 @@ window.LC_ADMIN = (function () {
       wide: true,
       noFocus: true,
       body:
+        (stock && !anything
+          ? '<div class="card flat" style="font-size:13px;color:var(--orange);margin-bottom:12px">На складе нет ничего из того, ' +
+            'что нужно этой точке. Сначала внесите закупку (раздел «Закупки»).</div>'
+          : '') +
         '<div class="stack-sm" style="gap:0">' +
-          rows.map(i =>
-            '<div class="fill-row">' +
+          rows.map(r => {
+            const i = r.i;
+            const whTxt = r.wh === null ? '' :
+              '<span style="color:' + (r.wh <= 0 ? 'var(--red)' : r.wh < r.room ? 'var(--orange)' : 'var(--green)') + '">склад ' + r.wh + '</span>';
+            const capTxt = cap ? '<span style="color:#B9C6DA">собрано ' + (cap[i.id] || 0) + '</span>' : '';
+            return '<div class="fill-row">' +
               '<div class="t"><b>' + UI.esc(i.name) + '</b>' +
                 '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) +
-                (i.cost ? ' · закупка ' + UI.money(i.cost) : '') + '</small></div>' +
+                (showCost && i.cost ? ' · закупка ' + UI.money(i.cost) : '') + '</small></div>' +
               '<div class="have">' + i.qty + ' / ' + i.max + ' шт<br>' +
-                '<span style="color:#4B5A75">можно +' + (i.max - i.qty) + '</span></div>' +
-              UI.stepper(i.id, 0, i.max - i.qty, true) +
-            '</div>').join('') +
+                '<span style="color:#4B5A75">влезет +' + r.room + '</span>' +
+                (whTxt || capTxt ? '<br>' + (whTxt || capTxt) : '') + '</div>' +
+              (r.lim > 0
+                ? UI.stepper(i.id, r.init, r.lim, true)
+                : '<span style="font-size:12px;color:var(--red);width:118px;text-align:center">' +
+                    (stock ? 'нет на складе' : 'нет в сборке') + '</span>') +
+            '</div>';
+          }).join('') +
           '<div class="row-between" style="padding-top:14px">' +
             '<b style="font-size:13px">Итого</b>' +
             '<b class="mono" id="fillTotal">0 шт</b>' +
@@ -3483,10 +3832,8 @@ window.LC_ADMIN = (function () {
         const recalc = () => {
           const vals = UI.stepperValues(root);
           let qty = 0, sum = 0;
-          rows.forEach(i => { const v = vals[i.id] || 0; qty += v; sum += v * (i.cost || 0); });
-          total.innerHTML = qty + ' шт' + (sum ? ' <span style="color:#64748B">· ' + UI.money(sum) + '</span>' : '');
-          const ok = root.querySelector('[data-fill-ok]');
-          if (ok) ok.disabled = qty === 0;
+          rows.forEach(r => { const v = vals[r.i.id] || 0; qty += v; sum += v * (r.i.cost || 0); });
+          total.innerHTML = qty + ' шт' + (showCost && sum ? ' <span style="color:#64748B">· ' + UI.money(sum) + '</span>' : '');
         };
         UI.bindSteppers(root, recalc);
         recalc();
@@ -3494,13 +3841,13 @@ window.LC_ADMIN = (function () {
       actions: [
         { label: 'Отмена', value: null },
         {
-          label: 'Заполнить всё до максимума', kind: 'btn-ghost',
+          label: fillLabel, kind: 'btn-ghost',
           onClick: (root) => {
             root.querySelectorAll('[data-stepper]').forEach(box => {
               box.querySelector('input').value = box.dataset.max;
               box.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            return false; // окно не закрываем — пусть человек увидит числа и нажмёт «Пополнить»
+            return false; // окно не закрываем — человек видит числа и сам жмёт кнопку
           }
         },
         {
@@ -3508,7 +3855,7 @@ window.LC_ADMIN = (function () {
           onClick: (root) => {
             const vals = UI.stepperValues(root);
             const plan = Object.keys(vals).filter(id => vals[id] > 0).map(id => ({ item_id: id, add: vals[id] }));
-            if (!plan.length) { UI.toast('Укажите, сколько добавить', 'err'); return false; }
+            if (!plan.length) { UI.toast('Укажите, сколько штук', 'err'); return false; }
             applied = plan;
             return true;
           }
@@ -3519,14 +3866,19 @@ window.LC_ADMIN = (function () {
     return applied;
   }
 
+  /** Остаток склада по прайсу: закуплено − отгружено на стеллажи. */
+  const stockMap = () => STORE.warehouse(ctx.purchases, ctx.ops);
+
   async function restockRack(code) {
     const rack = ctx.racks.find(r => r.code === code);
     if (!rack) return;
     const plan = await fillModal({
       rack,
-      title: 'Пополнить ' + rack.code,
-      subtitle: rack.station + (rack.address ? ' · ' + rack.address : ''),
-      okLabel: 'Пополнить'
+      title: 'Пополнить ' + rack.code + ' со склада',
+      subtitle: rack.station + (rack.address ? ' · ' + rack.address : '') +
+        ' · поставить можно не больше, чем есть на складе',
+      okLabel: 'Пополнить',
+      stock: stockMap()
     });
     if (!plan) return;
     await act(
@@ -3536,6 +3888,25 @@ window.LC_ADMIN = (function () {
   }
 
   /* ---------------- позиция из прайса ---------------- */
+
+  /** Всё, что известно о позиции прайса: склад, где стоит, продажи, последняя закупка. */
+  function catalogFacts(c, stock) {
+    const on = [];
+    ctx.racks.forEach(r => r.items.forEach(i => { if (i.catalog_id === c.id) on.push({ code: r.code, qty: i.qty, max: i.max }); }));
+    const from = Date.now() - 30 * 864e5;
+    const sold = ctx.ops.filter(o => o.type === 'sale' && !o.cancelled && o.catalog_id === c.id &&
+      new Date(o.created_at).getTime() >= from);
+    const buys = (ctx.purchases || []).filter(p => p.catalog_id === c.id);
+    const cost = Number(c.cost) || 0, price = Number(c.price) || 0;
+    return {
+      wh: Math.max(0, Math.floor(stock[c.id] || 0)),
+      on,
+      sold: sold.reduce((s, o) => s + o.qty, 0),
+      lastBuy: buys[0] || null,
+      margin: price - cost,
+      markup: price ? Math.round((price - cost) / price * 100) : 0   // как в прайсе: доля от цены продажи
+    };
+  }
 
   async function addItemModal(code) {
     const rack = ctx.racks.find(r => r.code === code);
@@ -3554,49 +3925,125 @@ window.LC_ADMIN = (function () {
       return;
     }
 
+    const stock = stockMap();
+    const facts = {};
+    list.forEach(c => { facts[c.id] = catalogFacts(c, stock); });
     let chosen = null;
+    let catF = 'all';
+    let onlyStock = list.some(c => facts[c.id].wh > 0);
+
+    const cats = CFG.categories.filter(k => list.some(c => c.category === k.key));
 
     await UI.modal({
-      title: 'Новая позиция',
-      subtitle: 'Стеллаж ' + code + ' · ' + rack.station,
-      wide: true,
+      title: 'Поставить позицию на ' + code,
+      subtitle: rack.station + (rack.address ? ' · ' + rack.address : '') +
+        ' · на полке сейчас ' + rack.items.length + ' поз.',
+      cls: 'xwide',
       noFocus: true,
       body:
-        '<div class="stack-sm" style="gap:14px">' +
-          '<div class="search"><input id="pickSearch" type="search" placeholder="Поиск по прайсу: название, фирма, артикул…"></div>' +
-          '<div class="picker" id="picker"></div>' +
-          '<div id="pickForm" class="hidden">' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-              UI.field('Сейчас на полке, шт', 'i-qty', '0', 'number', 0) +
-              UI.field('Вместимость, шт', 'i-max', '10', 'number', CFG.rules.defaultMax) +
+        '<div class="add-grid">' +
+          '<div class="stack-sm" style="gap:10px;min-width:0">' +
+            '<div class="search"><input id="pickSearch" type="search" placeholder="Поиск: название, фирма, артикул, объём…"></div>' +
+            '<div class="filters" id="pickCats" style="flex-wrap:wrap">' +
+              '<button type="button" class="chip active" data-pc="all">Все</button>' +
+              cats.map(k => '<button type="button" class="chip" data-pc="' + k.key + '">' + UI.esc(k.label) + '</button>').join('') +
             '</div>' +
+            '<label class="row" style="gap:8px;font-size:12px;color:#8494AC;cursor:pointer">' +
+              '<input type="checkbox" id="pickStock"' + (onlyStock ? ' checked' : '') + '> только то, что есть на складе</label>' +
+            '<div class="picker" id="picker" style="max-height:380px"></div>' +
           '</div>' +
+          '<div id="pickInfo" class="card flat stack-sm" style="gap:12px;align-self:start"></div>' +
         '</div>',
       onOpen: (root) => {
         const picker = root.querySelector('#picker');
-        const form = root.querySelector('#pickForm');
-        const paint = (q) => {
-          const s = (q || '').trim().toLowerCase();
-          const rows = list.filter(c => !s ||
-            (c.name + ' ' + (c.brand || '') + ' ' + (c.sku || '') + ' ' + (c.volume || '')).toLowerCase().includes(s));
+        const info = root.querySelector('#pickInfo');
+        let q = '';
+
+        const paintInfo = () => {
+          const c = list.find(x => x.id === chosen);
+          if (!c) {
+            info.innerHTML = '<div style="font-size:13px;color:#64748B;line-height:1.6">Выберите позицию слева — ' +
+              'здесь появятся цены, остаток на складе, где она уже стоит и как продаётся.</div>';
+            return;
+          }
+          const f = facts[c.id];
+          const cell = (label, value, color) => '<div class="stack-sm" style="gap:2px"><span style="font-size:11px;color:#64748B">' +
+            label + '</span><b class="mono" style="font-size:15px' + (color ? ';color:' + color : '') + '">' + value + '</b></div>';
+          const maxDef = Number(CFG.rules.defaultMax) || 10;
+          const qtyDef = Math.min(f.wh, maxDef);
+          info.innerHTML =
+            '<div><div class="row" style="gap:8px"><i class="cat-dot" style="background:' + UI.catOf(c.category).color + '"></i>' +
+              '<span style="font-size:11px;color:#8494AC">' + UI.esc(UI.catOf(c.category).label) + '</span></div>' +
+              '<div style="font-size:16px;font-weight:600;margin-top:4px">' + UI.esc(c.name) + '</div>' +
+              '<div style="font-size:12px;color:#8494AC">' + UI.esc([c.brand, c.volume, c.sku ? 'арт. ' + c.sku : ''].filter(Boolean).join(' · ')) + '</div></div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
+              cell('Закупка', UI.money(c.cost), '#8494AC') +
+              cell('Продажа', UI.money(c.price), 'var(--amber)') +
+              cell('С канистры', (f.margin >= 0 ? '+' : '') + UI.money(f.margin) +
+                ' <small style="font-size:11px;color:#64748B">' + f.markup + '%</small>', f.margin > 0 ? 'var(--green)' : 'var(--red)') +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+              cell('На складе', f.wh + ' шт', f.wh > 0 ? 'var(--green)' : 'var(--red)') +
+              cell('Продано по сети за 30 дн', f.sold + ' шт') +
+            '</div>' +
+            '<div style="font-size:12px;color:#8494AC;line-height:1.6">' +
+              (f.on.length ? 'Уже стоит: ' + f.on.map(x => x.code + ' (' + x.qty + '/' + x.max + ')').join(', ') : 'Пока не стоит ни на одном стеллаже') +
+              (f.lastBuy ? '<br>Последняя закупка: ' + UI.esc(String(f.lastBuy.date || '').split('-').reverse().join('.')) +
+                (f.lastBuy.supplier ? ' · ' + UI.esc(f.lastBuy.supplier) : '') + ' · ' + f.lastBuy.qty + ' шт по ' + UI.money(f.lastBuy.cost) : '') +
+            '</div>' +
+            (c.price ? '' : '<div style="font-size:12px;color:var(--orange)">Цена продажи не указана — поставьте её в прайсе, иначе продажи пойдут по 0 ₽.</div>') +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+              UI.field('Поставить сейчас, шт', 'i-qty', '0', 'number', qtyDef, 'со склада, не больше ' + f.wh) +
+              UI.field('Вместимость полки, шт', 'i-max', '10', 'number', maxDef, 'сколько помещается') +
+            '</div>' +
+            '<div id="i-sum" style="font-size:12px;color:#8494AC"></div>';
+          const sumEl = info.querySelector('#i-sum');
+          const upd = () => {
+            const n = Number(info.querySelector('#i-qty').value) || 0;
+            sumEl.textContent = n ? 'На полку уедет товара на ' + UI.money(n * (Number(c.cost) || 0)) +
+              ' по закупке, в продаже это ' + UI.money(n * (Number(c.price) || 0)) : 'Позиция встанет пустой — пополните её, когда появится товар';
+          };
+          info.querySelector('#i-qty').addEventListener('input', upd);
+          upd();
+        };
+
+        const paint = () => {
+          const s = q.trim().toLowerCase();
+          const rows = list.filter(c =>
+            (catF === 'all' || c.category === catF) &&
+            (!onlyStock || facts[c.id].wh > 0) &&
+            (!s || (c.name + ' ' + (c.brand || '') + ' ' + (c.sku || '') + ' ' + (c.volume || '')).toLowerCase().includes(s)))
+            .sort((a, b) => (facts[b.id].wh > 0) - (facts[a.id].wh > 0) || a.name.localeCompare(b.name));
           picker.innerHTML = rows.length
-            ? rows.map(c =>
-                '<button type="button" class="pick' + (chosen === c.id ? ' on' : '') + '" data-pick="' + c.id + '">' +
+            ? rows.map(c => {
+                const f = facts[c.id];
+                return '<button type="button" class="pick' + (chosen === c.id ? ' on' : '') + '" data-pick="' + c.id + '">' +
                   '<i class="cat-dot" style="background:' + UI.catOf(c.category).color + '"></i>' +
                   '<span class="t"><b>' + UI.esc(c.name) + '</b>' +
                     '<small>' + UI.esc([c.brand, c.volume, c.sku].filter(Boolean).join(' · ')) + '</small></span>' +
+                  '<span style="font-size:11px;white-space:nowrap;color:' + (f.wh > 0 ? 'var(--green)' : 'var(--red)') + '">склад ' + f.wh + '</span>' +
                   '<span class="p">' + UI.money(c.price) + '</span>' +
-                '</button>').join('')
-            : '<div class="empty-state" style="padding:20px">Ничего не найдено</div>';
+                '</button>';
+              }).join('')
+            : '<div class="empty-state" style="padding:20px">' +
+                (onlyStock ? 'На складе ничего подходящего. Снимите галочку «только то, что есть на складе».' : 'Ничего не найдено') + '</div>';
         };
-        paint('');
-        root.querySelector('#pickSearch').addEventListener('input', (e) => paint(e.target.value));
+        paint(); paintInfo();
+        root.querySelector('#pickSearch').addEventListener('input', (e) => { q = e.target.value; paint(); });
+        root.querySelector('#pickStock').addEventListener('change', (e) => { onlyStock = e.target.checked; paint(); });
+        root.querySelector('#pickCats').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-pc]');
+          if (!b) return;
+          catF = b.dataset.pc;
+          root.querySelectorAll('[data-pc]').forEach(x => x.classList.toggle('active', x === b));
+          paint();
+        });
         picker.addEventListener('click', (e) => {
           const b = e.target.closest('[data-pick]');
           if (!b) return;
           chosen = b.dataset.pick;
           picker.querySelectorAll('.pick').forEach(x => x.classList.toggle('on', x.dataset.pick === chosen));
-          form.classList.remove('hidden');
+          paintInfo();
         });
       },
       actions: [
@@ -3605,10 +4052,13 @@ window.LC_ADMIN = (function () {
           label: 'Поставить на стеллаж', kind: 'btn-primary',
           onClick: (root) => {
             if (!chosen) { UI.toast('Выберите позицию из прайса', 'err'); return false; }
-            const qty = Number(root.querySelector('#i-qty').value) || 0;
-            const max = Number(root.querySelector('#i-max').value) || 0;
+            const qty = Math.round(Number(root.querySelector('#i-qty').value) || 0);
+            const max = Math.round(Number(root.querySelector('#i-max').value) || 0);
+            const wh = facts[chosen].wh;
             if (max < 1) { UI.toast('Вместимость должна быть больше нуля', 'err'); return false; }
+            if (qty < 0) { UI.toast('Количество не может быть отрицательным', 'err'); return false; }
             if (qty > max) { UI.toast('На полке не может быть больше вместимости', 'err'); return false; }
+            if (qty > wh) { UI.toast('На складе только ' + wh + ' шт. Поставьте меньше или внесите закупку.', 'err'); return false; }
             ctx.act(() => STORE.addItem(code, { catalog_id: chosen, qty, max }, ctx.user), 'Позиция добавлена');
             return true;
           }
@@ -3743,30 +4193,45 @@ window.LC_ADMIN = (function () {
   }
 
   /** Отметить, что товар для точки собран. Продавец увидит «везём». */
+  /**
+   * «Поставка собрана»: админ отмечает, СКОЛЬКО РЕАЛЬНО собрал по каждой позиции.
+   * Больше, чем есть на складе, собрать нельзя. Продавец при приёме увидит эти же цифры.
+   */
   async function markPacked(code) {
     const r = ctx.racks.find(x => x.code === code);
     if (!r) return;
-    const need = r.items.filter(i => i.max > i.qty)
-      .map(i => i.name + ' +' + (i.max - i.qty) + ' шт');
-    const ok = await UI.modal({
-      title: 'Поставка для ' + r.code + ' собрана?',
-      subtitle: r.station + (r.address ? ' · ' + r.address : ''),
-      body:
-        '<div class="stack-sm" style="gap:12px">' +
-          '<div style="font-size:13px;color:#8494AC">Продавец увидит у себя: ' +
-            '«Поставка собрана, везём к вам». Заявка закроется, когда он примет товар.</div>' +
-          (need.length
-            ? '<div class="card flat stack-sm" style="gap:6px;padding:12px 14px">' +
-              need.map(n => '<div style="font-size:13px">• ' + UI.esc(n) + '</div>').join('') + '</div>'
-            : '') +
-        '</div>',
-      actions: [
-        { label: 'Отмена', value: false },
-        { label: 'Да, собрана', kind: 'btn-primary', value: true }
-      ]
+    const stock = stockMap();
+    const initial = {};
+    r.items.forEach(i => { initial[i.id] = Math.min(i.max - i.qty, Math.max(0, Math.floor(stock[i.catalog_id] || 0))); });
+    const plan = await fillModal({
+      rack: r,
+      title: 'Собрать поставку для ' + r.code,
+      subtitle: r.station + (r.address ? ' · ' + r.address : '') +
+        ' · укажите, сколько реально положили в машину. Продавец увидит «везём к вам».',
+      okLabel: 'Поставка собрана',
+      stock, initial
     });
-    if (!ok) return;
-    ctx.act(() => STORE.markPacked(code, ctx.user), 'Точка увидит: поставка собрана');
+    if (!plan) return;
+    const items = plan.map(p => {
+      const it = r.items.find(i => i.id === p.item_id);
+      return { item_id: p.item_id, name: it ? it.name : '', qty: p.add };
+    });
+    ctx.act(() => STORE.markPacked(code, ctx.user, null, items),
+      'Собрано ' + items.reduce((s, x) => s + x.qty, 0) + ' шт — точка увидит «везём к вам»');
+  }
+
+  /** Автосборка для маршрута: по каждой точке берём сколько нужно, но не больше склада. */
+  function autoPack(racks) {
+    const left = Object.assign({}, stockMap());
+    return racks.map(r => ({
+      code: r.code,
+      items: r.items.filter(i => i.max > i.qty).map(i => {
+        const have = Math.max(0, Math.floor(left[i.catalog_id] || 0));
+        const qty = Math.min(i.max - i.qty, have);
+        left[i.catalog_id] = have - qty;
+        return { item_id: i.id, name: i.name, qty };
+      }).filter(x => x.qty > 0)
+    }));
   }
 
   /* ---------------- ручная правка позиции ----------------
@@ -3889,7 +4354,13 @@ window.LC_ADMIN = (function () {
             const max = Math.round(Number(root.querySelector('#imMax').value) || 0);
             if (max < 1) { UI.toast('Вместимость должна быть больше нуля', 'err'); return false; }
             const r = root.querySelector('input[name="imR"]:checked');
-            result = { qty, max, reason: r ? r.value : null };
+            const reason = r ? r.value : null;
+            const wh = Math.max(0, Math.floor(stockMap()[it.catalog_id] || 0));
+            if (reason === 'restock' && qty - it.qty > wh) {
+              UI.toast('На складе только ' + wh + ' шт. Поставьте меньше, внесите закупку или выберите «Сверка».', 'err');
+              return false;
+            }
+            result = { qty, max, reason };
             return true;
           }
         }
@@ -3987,17 +4458,17 @@ window.LC_ADMIN = (function () {
     }
 
     if (ok === 'packed') {
-      const codes = route.map(x => x.r.code);
-      if (!codes.length) return;
+      const packs = autoPack(route.map(x => x.r)).filter(p => p.items.length);
+      if (!packs.length) { UI.toast('На складе нет товара ни для одной точки маршрута — внесите закупку', 'err'); return; }
       ctx.act(async () => {
         let n = 0;
-        for (const c of codes) {
-          try { await STORE.markPacked(c, ctx.user, 'собрано по маршруту'); n++; }
+        for (const p of packs) {
+          try { await STORE.markPacked(p.code, ctx.user, null, p.items); n++; }
           catch (e) { /* уже отмечено — пропускаем */ }
         }
         if (!n) throw new Error('Все точки маршрута уже отмечены');
         return n;
-      }, (n) => 'Отмечено точек: ' + n + ' — продавцы видят «везём»');
+      }, (n) => 'Собрано для точек: ' + n + ' (по остатку склада) — продавцы видят «везём»');
     }
   }
 
@@ -4053,6 +4524,11 @@ window.LC_ADMIN = (function () {
       if (a === 'minus') minusOne(b.dataset.item);
       if (a === 'plus') {
         const it = itemById(b.dataset.item);
+        const wh = it ? Math.floor(stockMap()[it.catalog_id] || 0) : 0;
+        if (it && wh <= 0) {
+          UI.toast('На складе нет «' + it.name + '». Внесите закупку — или через ✎ → «Сверка», если канистра на полке уже была.', 'err');
+          return;
+        }
         ctx.act(() => STORE.changeQty(b.dataset.item, +1, {
           type: 'restock', user_login: ctx.user.login, user_name: ctx.user.name, note: 'поставлено администратором'
         }), 'Поставлено со склада: ' + (it ? it.name : '1 шт'));
@@ -4732,19 +5208,19 @@ window.LC_PRICE = (function () {
   /* ---------------- отрисовка ---------------- */
 
   const TH = [
-    { key: 'name', label: 'Товар' },
+    { key: 'name', label: 'Товар', hint: 'Название и фирма' },
     { key: 'category', label: 'Категория' },
     { key: null, label: 'Объём' },
     { key: null, label: 'Артикул' },
-    { key: 'cost', label: 'Закупка ₽', cls: 'r' },
-    { key: 'price', label: 'Продажа ₽', cls: 'r' },
-    { key: 'margin', label: 'Маржа', cls: 'r' },
-    { key: 'wh', label: 'На складе', cls: 'r' },
-    { key: 'stock', label: 'На стеллажах', cls: 'r' },
-    { key: 'bought', label: 'Закуплено', cls: 'r' },
-    { key: 'sold', label: 'Продано 30д', cls: 'r' },
-    { key: 'revenue', label: 'Выручка 30д', cls: 'r' },
-    { key: 'created', label: 'В прайсе с', cls: 'r' },
+    { key: 'cost', label: 'Закупка ₽', cls: 'r', hint: 'Почём вы покупаете 1 шт у поставщика' },
+    { key: 'price', label: 'Продажа ₽', cls: 'r', hint: 'Почём продавец продаёт 1 шт клиенту' },
+    { key: 'margin', label: 'Маржа', cls: 'r', hint: 'Сколько вы зарабатываете с 1 шт: продажа − закупка. Процент — доля от цены продажи' },
+    { key: 'wh', label: 'На складе', cls: 'r', hint: 'Лежит у вас, ещё не отвезено: всё закупленное минус всё, что поставили на стеллажи' },
+    { key: 'stock', label: 'На стеллажах', cls: 'r', hint: 'Стоит сейчас на полках СТО / сколько туда помещается · на скольких точках' },
+    { key: 'bought', label: 'Закуплено', cls: 'r', hint: 'Сколько всего закупили за всё время · последняя цена закупки' },
+    { key: 'sold', label: 'Продано 30д', cls: 'r', hint: 'Сколько штук продали на всех точках за последние 30 дней' },
+    { key: 'revenue', label: 'Выручка 30д', cls: 'r', hint: 'Сколько денег получили за эти продажи' },
+    { key: 'created', label: 'В прайсе с', cls: 'r', hint: 'Когда позицию завели в прайс' },
     { key: null, label: '', cls: 'r' }
   ];
 
@@ -4804,10 +5280,19 @@ window.LC_PRICE = (function () {
             '<span>' + (showArchived ? 'Показать рабочие' : 'Архив · ' + archivedCount) + '</span></button>' +
         '</div>' +
 
+        '<details class="card flat" style="font-size:13px;color:#B9C6DA;line-height:1.6">' +
+          '<summary style="cursor:pointer;color:var(--amber)">Как читать таблицу</summary>' +
+          '<div class="stack-sm" style="gap:4px;margin-top:10px">' +
+            TH.filter(t => t.hint).map(t => '<div><b>' + t.label + '</b> — ' + UI.esc(t.hint) + '.</div>').join('') +
+            '<div style="margin-top:6px;color:#8494AC">Путь товара: <b>Закупки</b> (пришло на склад) → <b>Стеллажи</b> ' +
+              '(со склада на полку) → <b>продажа</b> у продавца. Если в «На складе» стоит ⚠, значит на полки поставили больше, ' +
+              'чем внесено закупок: внесите закупку или очистите историю в «Движениях».</div>' +
+          '</div>' +
+        '</details>' +
         (list.length
           ? '<div class="grid-wrap"><table class="grid"><thead><tr>' +
               TH.map(t => '<th class="' + (t.cls || '') + (t.key ? ' sortable' : '') +
-                (sort.key === t.key ? ' sorted' : '') + '"' +
+                (sort.key === t.key ? ' sorted' : '') + '"' + (t.hint ? ' title="' + UI.esc(t.hint) + '"' : '') +
                 (t.key ? ' data-sort="' + t.key + '"' : '') + '>' + t.label +
                 (sort.key === t.key ? (sort.dir > 0 ? ' ↑' : ' ↓') : '') + '</th>').join('') +
             '</tr></thead><tbody>' + list.map(row).join('') + '</tbody></table></div>'
@@ -4844,8 +5329,13 @@ window.LC_PRICE = (function () {
       '<td class="r ' + (s.margin > 0 ? 'pos' : s.margin < 0 ? 'neg' : '') + '">' +
         (s.margin > 0 ? '+' : '') + UI.num(s.margin) +
         ' <span style="color:#4B5A75">' + s.marginPct + '%</span></td>' +
-      '<td class="r ' + (s.stock > 0 ? 'pos' : s.stock < 0 ? 'neg' : '') + '">' +
-        (s.stock ? s.stock + ' шт' : '<span style="color:#4B5A75">0</span>') + '</td>' +
+      '<td class="r ' + (s.stock > 0 ? 'pos' : '') + '">' +
+        (s.stock > 0 ? s.stock + ' шт'
+          : s.stock < 0
+            ? '<span title="На стеллажи поставлено на ' + (-s.stock) + ' шт больше, чем внесено закупок. ' +
+                'Внесите закупку или очистите историю." style="color:var(--orange);cursor:help">0 ⚠ ' +
+                '<small style="font-size:10px">без закупки ' + (-s.stock) + '</small></span>'
+            : '<span style="color:#4B5A75">0</span>') + '</td>' +
       '<td class="r' + stockCls + '">' + (s.onRacks.length
         ? s.onRacksQty + ' / ' + s.capacity + ' <span style="color:#4B5A75">· ' + s.points + ' СТО</span>'
         : '<span style="color:#4B5A75">не стоит</span>') + '</td>' +
@@ -5503,8 +5993,10 @@ window.LC_BUYS = (function () {
 
 window.LC_MOVES = (function () {
   const UI = window.LC_UI;
+  const STORE = window.LC_STORE;
 
   let ctx = null;
+  const selected = new Set();   // отмеченные записи для удаления
   let period = 7;          // дней; 0 — за всё время
   let rackCode = 'all';
   let kind = 'move';       // move | sale | in | audit | setup | price | all
@@ -5519,6 +6011,7 @@ window.LC_MOVES = (function () {
     { key: 'setup', label: 'Стеллажи' },
     { key: 'price', label: 'Прайс' },
     { key: 'users', label: 'Сотрудники' },
+    { key: 'history', label: 'Правки истории' },
     { key: 'all',   label: 'Всё' }
   ];
   const PERIODS = [
@@ -5589,6 +6082,10 @@ window.LC_MOVES = (function () {
     ctx = context;
     const rows = list();
     const t = totals(rows);
+    const shown = rows.slice(0, 500);
+    const alive = new Set(ctx.ops.map(o => o.id));
+    Array.from(selected).forEach(id => { if (!alive.has(id)) selected.delete(id); });
+    const allOn = shown.length > 0 && shown.every(o => selected.has(o.id));
     const rackName = rackCode === 'all' ? 'по всем стеллажам'
       : (() => { const r = ctx.racks.find(x => x.code === rackCode); return r ? r.code + ' · ' + r.station : rackCode; })();
 
@@ -5597,6 +6094,7 @@ window.LC_MOVES = (function () {
         '<div class="page-head">' +
           '<div><h1>Движения товара</h1><p>Каждая штука: продажа, приход, сверка — ' + UI.esc(rackName) + '</p></div>' +
           '<div class="page-actions">' +
+            '<button class="btn btn-ghost" id="mClear" style="color:var(--red)">' + UI.icon('trash', 15) + '<span>Очистить историю</span></button>' +
             '<button class="btn btn-ghost" id="mExport">' + UI.icon('down', 15) + '<span>Выгрузить в CSV</span></button>' +
           '</div>' +
         '</div>' +
@@ -5632,12 +6130,22 @@ window.LC_MOVES = (function () {
             '<input id="mSearch" type="search" placeholder="Товар, артикул, продавец…" value="' + UI.esc(query) + '"></div>' +
         '</div>' +
 
+        (selected.size
+          ? '<div class="card flat row-between" style="padding:10px 14px;gap:12px;flex-wrap:wrap;border-color:rgba(255,90,95,.35)">' +
+              '<span style="font-size:13px">Отмечено записей: <b>' + selected.size + '</b></span>' +
+              '<div class="row" style="gap:8px">' +
+                '<button class="btn btn-ghost btn-sm" id="mSelNone">Снять отметки</button>' +
+                '<button class="btn btn-danger btn-sm" id="mSelDel">' + UI.icon('trash', 14) + '<span>Удалить отмеченные</span></button>' +
+              '</div>' +
+            '</div>'
+          : '') +
         (rows.length
           ? '<div class="grid-wrap"><table class="grid"><thead><tr>' +
+              '<th style="width:34px"><input type="checkbox" id="mAll" title="Отметить все на экране"' + (allOn ? ' checked' : '') + '></th>' +
               '<th>Когда</th><th>Стеллаж</th><th>Товар</th><th>Артикул</th><th>Операция</th>' +
               '<th class="r">Кол-во</th><th class="r">Цена</th><th class="r">Сумма</th>' +
-              '<th class="r">Маржа</th><th class="r">Остаток после</th><th>Кто</th>' +
-            '</tr></thead><tbody>' + rows.slice(0, 500).map(row).join('') + '</tbody></table></div>' +
+              '<th class="r">Маржа</th><th class="r">Остаток после</th><th>Кто</th><th class="r"></th>' +
+            '</tr></thead><tbody>' + shown.map(row).join('') + '</tbody></table></div>' +
             (rows.length > 500
               ? '<p style="margin:0;font-size:12px;color:#64748B">Показаны последние 500 из ' +
                 UI.num(rows.length) + '. Сузьте период или выгрузите в CSV.</p>'
@@ -5663,7 +6171,8 @@ window.LC_MOVES = (function () {
     const qtyCls = o.cancelled ? '' : (sign > 0 ? 'pos' : sign < 0 ? 'neg' : '');
     const isSale = o.type === 'sale' && !o.cancelled;
 
-    return '<tr>' +
+    return '<tr data-op="' + UI.esc(o.id) + '"' + (selected.has(o.id) ? ' style="background:rgba(255,90,95,.06)"' : '') + '>' +
+      '<td><input type="checkbox" data-sel' + (selected.has(o.id) ? ' checked' : '') + '></td>' +
       '<td class="num" style="color:#8494AC;white-space:nowrap">' + UI.dateTime(o.created_at) + '</td>' +
       '<td><span class="sku" style="color:' + (o.rack_code ? 'var(--amber)' : '#64748B') + '">' +
         UI.esc(o.rack_code || 'склад') + '</span></td>' +
@@ -5681,6 +6190,10 @@ window.LC_MOVES = (function () {
         (isSale && o.margin ? '+' + UI.num(o.margin) : '—') + '</td>' +
       '<td class="r" style="color:#8494AC">' + (o.qty_after === null || o.qty_after === undefined ? '—' : o.qty_after) + '</td>' +
       '<td style="font-size:12px;color:#8494AC">' + UI.esc(o.user_name || '—') + '</td>' +
+      '<td class="r"><div class="row-act">' +
+        '<button class="icon-btn sm" data-op-act="edit" title="Исправить запись">' + UI.icon('edit', 14) + '</button>' +
+        '<button class="icon-btn sm danger" data-op-act="del" title="Удалить запись">' + UI.icon('trash', 14) + '</button>' +
+      '</div></td>' +
     '</tr>';
   }
 
@@ -5717,6 +6230,134 @@ window.LC_MOVES = (function () {
     });
 
     host.querySelector('#mExport').addEventListener('click', exportCsv);
+    host.querySelector('#mClear').addEventListener('click', () => clearModal(ctx));
+
+    const all = host.querySelector('#mAll');
+    if (all) all.addEventListener('change', () => {
+      list().slice(0, 500).forEach(o => { if (all.checked) selected.add(o.id); else selected.delete(o.id); });
+      rerender();
+    });
+    const none = host.querySelector('#mSelNone');
+    if (none) none.addEventListener('click', () => { selected.clear(); rerender(); });
+    const bulk = host.querySelector('#mSelDel');
+    if (bulk) bulk.addEventListener('click', () => deleteModal(Array.from(selected)));
+
+    const table = host.querySelector('.grid');
+    if (table) table.addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-op]');
+      if (!tr) return;
+      const id = tr.dataset.op;
+      if (e.target.matches('[data-sel]')) {
+        if (e.target.checked) selected.add(id); else selected.delete(id);
+        rerender();
+        return;
+      }
+      const b = e.target.closest('[data-op-act]');
+      if (!b) return;
+      if (b.dataset.opAct === 'del') deleteModal([id]);
+      if (b.dataset.opAct === 'edit') editModal(id);
+    });
+  }
+
+  /* ---------------- правка и удаление записей ---------------- */
+
+  function describe(o) {
+    return UI.opInfo(o.type).label + (o.item_name ? ' · ' + o.item_name : (o.note ? ' · ' + o.note : '')) +
+      (o.qty ? ' · ' + o.qty + ' шт' : '') + (o.rack_code ? ' · ' + o.rack_code : '');
+  }
+
+  async function deleteModal(ids) {
+    const ops = ctx.ops.filter(o => ids.indexOf(o.id) >= 0);
+    if (!ops.length) return;
+    const withShelf = ops.filter(o => STORE.opEffect(o) !== 0);
+    const buys = ops.filter(o => o.type === 'purchase').length;
+    let revert = null;
+
+    await UI.modal({
+      title: ops.length === 1 ? 'Удалить запись?' : 'Удалить записи: ' + ops.length + '?',
+      subtitle: 'Строки исчезнут из истории, из выручки и итогов. В журнале останется одна отметка, что вы их удалили.',
+      wide: true,
+      body:
+        '<div class="stack-sm" style="gap:12px">' +
+          '<div class="card flat stack-sm" style="gap:5px;padding:12px 14px;max-height:200px;overflow:auto">' +
+            ops.slice(0, 30).map(o => '<div style="font-size:12px"><span style="color:#64748B">' + UI.dateTime(o.created_at) +
+              '</span> ' + UI.esc(describe(o)) + '</div>').join('') +
+            (ops.length > 30 ? '<div style="font-size:12px;color:#64748B">и ещё ' + (ops.length - 30) + '…</div>' : '') +
+          '</div>' +
+          (withShelf.length
+            ? '<label class="row" style="gap:10px;font-size:13px;cursor:pointer;align-items:flex-start">' +
+                '<input type="checkbox" id="dRevert" checked style="margin-top:2px">' +
+                '<span>Вернуть остатки на полках так, будто этих операций не было' +
+                  '<small style="display:block;color:#64748B;font-size:11px;margin-top:2px">Например, удалили ошибочную продажу — ' +
+                  'канистра вернётся на полку. Снимите галочку, если на полке и так верная цифра.</small></span></label>'
+            : '') +
+          (buys
+            ? '<div style="font-size:12px;color:var(--orange)">Среди них ' + buys + ' записей о закупке. Здесь удаляется только строка ' +
+              'журнала — чтобы убрать сам товар со склада, удалите закупку в разделе «Закупки».</div>'
+            : '') +
+        '</div>',
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Удалить', kind: 'btn-danger',
+          onClick: (root) => { const c = root.querySelector('#dRevert'); revert = !!(c && c.checked); return true; }
+        }
+      ]
+    });
+    if (revert === null) return;
+    const res = await ctx.act(() => STORE.deleteOps(ops.map(o => o.id), revert, ctx.user),
+      (r) => 'Удалено записей: ' + r.count + (r.shifted ? ' · остатки на полках поправлены' : '') +
+        (r.gone ? ' · ' + r.gone + ' позиций уже нет на стеллаже' : ''));
+    if (res) ops.forEach(o => selected.delete(o.id));
+  }
+
+  async function editModal(id) {
+    const o = ctx.ops.find(x => x.id === id);
+    if (!o) return;
+    const qtyEditable = ['sale', 'restock', 'delivery', 'cancel', 'unload', 'writeoff'].indexOf(o.type) >= 0 &&
+      !o.cancelled && !!o.item_id;
+    const isSale = o.type === 'sale';
+    let data = null;
+
+    await UI.modal({
+      title: 'Исправить запись',
+      subtitle: UI.dateTime(o.created_at) + ' · ' + describe(o) + (o.user_name ? ' · ' + o.user_name : ''),
+      wide: true,
+      body:
+        '<div class="stack-sm" style="gap:14px">' +
+          (qtyEditable
+            ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+                UI.field('Количество, шт', 'eQty', '1', 'number', o.qty) +
+                (isSale ? UI.field('Цена продажи за 1 шт, ₽', 'ePrice', '0', 'number', o.price) : '<div></div>') +
+              '</div>' +
+              '<label class="row" style="gap:10px;font-size:13px;cursor:pointer;align-items:flex-start">' +
+                '<input type="checkbox" id="eRevert" checked style="margin-top:2px">' +
+                '<span>Поправить остаток на полке на разницу' +
+                  '<small style="display:block;color:#64748B;font-size:11px;margin-top:2px">Было продано 2, исправили на 1 — ' +
+                  'одна канистра вернётся на полку.</small></span></label>'
+            : '<div style="font-size:12px;color:#64748B">У этой записи можно поправить только комментарий. ' +
+              'Если операции не было — удалите запись.</div>') +
+          UI.field('Комментарий', 'eNote', '', 'text', o.note || '') +
+        '</div>',
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Сохранить', kind: 'btn-primary',
+          onClick: (root) => {
+            data = { note: root.querySelector('#eNote').value };
+            if (qtyEditable) {
+              data.qty = Number(root.querySelector('#eQty').value);
+              if (!(data.qty >= 1)) { UI.toast('Количество не меньше 1. Если операции не было — удалите запись.', 'err'); data = null; return false; }
+              if (isSale) data.price = Number(root.querySelector('#ePrice').value);
+              data.revert = root.querySelector('#eRevert').checked;
+            }
+            return true;
+          }
+        }
+      ]
+    });
+    if (!data) return;
+    ctx.act(() => STORE.editOp(id, data, ctx.user), 'Запись исправлена');
   }
 
   function exportCsv() {
@@ -5739,8 +6380,400 @@ window.LC_MOVES = (function () {
     UI.toast('Движения выгружены: ' + rows.length + ' записей', 'ok');
   }
 
-  return { render, openFor };
+  /* ---------------- очистить историю целиком ---------------- */
+
+  async function clearModal(c) {
+    const context = c || ctx;
+    const nOps = context.ops.length, nBuy = (context.purchases || []).length, nReq = (context.requests || []).length;
+    const onShelves = context.racks.reduce((s, r) => s + r.items.reduce((t, i) => t + i.qty, 0), 0);
+    let what = null;
+
+    const cb = (id, on, title, sub) =>
+      '<label class="row" style="gap:10px;font-size:13px;cursor:pointer;align-items:flex-start;padding:9px 11px;border:1px solid var(--line);border-radius:9px">' +
+        '<input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + ' style="margin-top:2px">' +
+        '<span><b>' + title + '</b><small style="display:block;color:#64748B;font-size:11px;margin-top:2px">' + sub + '</small></span></label>';
+
+    await UI.modal({
+      title: 'Очистить историю',
+      subtitle: 'Начать учёт с чистого листа. Прайс, стеллажи и сотрудники остаются.',
+      wide: true,
+      body:
+        '<div class="stack-sm" style="gap:10px">' +
+          cb('cOps', true, 'Движения — ' + UI.num(nOps) + ' записей', 'Продажи, пополнения, списания, сверки, правки. Выручка и маржа обнулятся.') +
+          cb('cBuy', true, 'Закупки — ' + UI.num(nBuy) + ' записей', 'Всё, что вносили в «Закупки». Склад станет 0 по всем позициям.') +
+          cb('cReq', true, 'Заявки и отметки «поставка собрана»', 'Сейчас открытых: ' + nReq + '.') +
+          cb('cShelf', false, 'Обнулить остатки на полках — сейчас ' + UI.num(onShelves) + ' шт',
+            'Позиции на стеллажах останутся, но с нулём. Не отмечайте, если товар на полках реально стоит.') +
+          '<div style="font-size:12px;color:#8494AC;line-height:1.55">Не трогаем: прайс (' + context.catalog.length + ' поз.), ' +
+            'стеллажи (' + context.racks.length + '), сотрудников, настройки.</div>' +
+          cb('cBackup', true, 'Сначала скачать резервную копию (JSON)', 'На случай, если что-то понадобится вернуть или посмотреть.') +
+          '<div class="field"><label for="cWord">Чтобы подтвердить, напишите: ОЧИСТИТЬ</label>' +
+            '<input class="input sm" id="cWord" autocomplete="off" placeholder="ОЧИСТИТЬ"></div>' +
+        '</div>',
+      actions: [
+        { label: 'Отмена', value: null },
+        {
+          label: 'Очистить', kind: 'btn-danger',
+          onClick: (root) => {
+            const on = (id) => root.querySelector('#' + id).checked;
+            if (root.querySelector('#cWord').value.trim().toUpperCase() !== 'ОЧИСТИТЬ') {
+              UI.toast('Напишите слово ОЧИСТИТЬ — это защита от случайного нажатия', 'err'); return false;
+            }
+            what = { ops: on('cOps'), purchases: on('cBuy'), requests: on('cReq'), shelves: on('cShelf'), backup: on('cBackup') };
+            if (!what.ops && !what.purchases && !what.requests && !what.shelves) {
+              UI.toast('Отметьте, что очистить', 'err'); what = null; return false;
+            }
+            return true;
+          }
+        }
+      ]
+    });
+    if (!what) return;
+
+    if (what.backup) {
+      const dump = {
+        exported_at: new Date().toISOString(),
+        catalog: context.catalog, racks: context.racks, purchases: context.purchases,
+        ops: context.ops, requests: context.requests
+      };
+      UI.downloadFile('lube-control-kopiya-' + UI.today() + '.json', JSON.stringify(dump, null, 2), 'application/json');
+    }
+    selected.clear();
+    context.act(() => STORE.clearHistory(what, context.user), (r) =>
+      'Очищено: ' + [what.ops ? 'движений ' + r.ops : '', what.purchases ? 'закупок ' + r.purchases : '',
+        what.requests ? 'заявок ' + r.requests : '', what.shelves ? 'на полках ' + r.shelves + ' шт' : '']
+        .filter(Boolean).join(', '));
+  }
+
+  return { render, openFor, clearModal };
 })();
+
+
+/* ============================================================
+   Lube Control — ДЕНЬГИ
+   Всё про деньги на одном экране: сколько принёс каждый стеллаж,
+   сколько отдаём продавцам, сколько потрачено на закупки и сколько
+   денег сейчас лежит в товаре. Каждая цифра подписана простыми словами.
+   ============================================================ */
+
+window.LC_MONEY = (function () {
+  const CFG = window.LC_CONFIG;
+  const STORE = window.LC_STORE;
+  const UI = window.LC_UI;
+
+  let ctx = null;
+  let period = 'month';
+
+  const PERIODS = [
+    { key: 'today', label: 'Сегодня' },
+    { key: 'week', label: '7 дней' },
+    { key: 'month', label: 'Этот месяц' },
+    { key: 'prev', label: 'Прошлый месяц' },
+    { key: 'd30', label: '30 дней' },
+    { key: 'year', label: 'Этот год' },
+    { key: 'all', label: 'Всё время' }
+  ];
+
+  function range(key) {
+    const now = new Date();
+    const d0 = new Date(now); d0.setHours(0, 0, 0, 0);
+    const end = new Date(d0); end.setDate(end.getDate() + 1);
+    if (key === 'today') return { from: d0, to: end };
+    if (key === 'week') { const f = new Date(d0); f.setDate(f.getDate() - 6); return { from: f, to: end }; }
+    if (key === 'd30') { const f = new Date(d0); f.setDate(f.getDate() - 29); return { from: f, to: end }; }
+    if (key === 'month') return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: end };
+    if (key === 'prev') return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1), to: new Date(now.getFullYear(), now.getMonth(), 1) };
+    if (key === 'year') return { from: new Date(now.getFullYear(), 0, 1), to: end };
+    return { from: new Date(2000, 0, 1), to: end };
+  }
+
+  const pct = () => Number(CFG.rules.bonusPercent) || 0;
+  const isAdminLogin = (login) => login === 'admin' || (ctx.user && login === ctx.user.login);
+  const inRange = (iso, r) => { const t = new Date(iso).getTime(); return t >= r.from.getTime() && t < r.to.getTime(); };
+  const dateIn = (d, r) => { const t = new Date(String(d) + 'T12:00:00').getTime(); return t >= r.from.getTime() && t < r.to.getTime(); };
+
+  /* ---------------- расчёт ---------------- */
+
+  function blank() { return { qty: 0, revenue: 0, cogs: 0, bonus: 0, writeoff: 0, writeoffQty: 0 }; }
+  function finish(x) {
+    x.gross = x.revenue - x.cogs;
+    x.net = x.gross - x.bonus - x.writeoff;
+    x.marginPct = x.revenue ? Math.round(x.gross / x.revenue * 100) : 0;
+    return x;
+  }
+
+  function compute(r) {
+    const total = blank();
+    const byRack = {}, bySeller = {}, byItem = {};
+    const P = pct();
+
+    ctx.ops.forEach(o => {
+      if (!inRange(o.created_at, r)) return;
+      if (o.type === 'sale' && !o.cancelled) {
+        const qty = Number(o.qty) || 0;
+        const revenue = Number(o.amount) || 0;
+        const cogs = qty * (Number(o.cost) || 0);
+        const bonus = isAdminLogin(o.user_login) ? 0 : revenue * P / 100;
+        [total, byRack[o.rack_code] = byRack[o.rack_code] || blank()].forEach(x => {
+          x.qty += qty; x.revenue += revenue; x.cogs += cogs; x.bonus += bonus;
+        });
+        const sk = o.user_login || '—';
+        const s = bySeller[sk] = bySeller[sk] || Object.assign(blank(), { name: o.user_name || sk, racks: new Set(), admin: isAdminLogin(o.user_login) });
+        s.qty += qty; s.revenue += revenue; s.cogs += cogs; s.bonus += bonus; if (o.rack_code) s.racks.add(o.rack_code);
+        const ik = o.catalog_id || o.item_name;
+        const it = byItem[ik] = byItem[ik] || Object.assign(blank(), { name: o.item_name, brand: o.brand || '' });
+        it.qty += qty; it.revenue += revenue; it.cogs += cogs; it.bonus += bonus;
+      }
+      if (o.type === 'writeoff') {
+        const loss = (Number(o.qty) || 0) * (Number(o.cost) || 0);
+        [total, byRack[o.rack_code] = byRack[o.rack_code] || blank()].forEach(x => {
+          x.writeoff += loss; x.writeoffQty += Number(o.qty) || 0;
+        });
+      }
+    });
+
+    const buys = (ctx.purchases || []).filter(p => dateIn(p.date, r));
+    const spent = buys.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const byPay = {}, bySup = {};
+    buys.forEach(p => {
+      const k = p.payment || 'не указано'; byPay[k] = (byPay[k] || 0) + (Number(p.amount) || 0);
+      const sk = p.supplier || 'не указан'; bySup[sk] = (bySup[sk] || 0) + (Number(p.amount) || 0);
+    });
+
+    return { total: finish(total), byRack, bySeller, byItem, spent, buysCount: buys.length, byPay, bySup };
+  }
+
+  /** Сколько денег сейчас лежит в товаре. */
+  function inventory() {
+    const stock = STORE.warehouse(ctx.purchases, ctx.ops);
+    const byId = {};
+    ctx.catalog.forEach(c => { byId[c.id] = c; });
+    let whCost = 0, whQty = 0, whRetail = 0;
+    Object.keys(stock).forEach(id => {
+      const n = stock[id]; const c = byId[id];
+      if (n > 0 && c) { whQty += n; whCost += n * (Number(c.cost) || 0); whRetail += n * (Number(c.price) || 0); }
+    });
+    let shQty = 0, shCost = 0, shRetail = 0;
+    const perRack = {};
+    ctx.racks.forEach(r => {
+      let q = 0, c = 0, p = 0;
+      r.items.forEach(i => { q += i.qty; c += i.qty * (Number(i.cost) || 0); p += i.qty * (Number(i.price) || 0); });
+      perRack[r.code] = { qty: q, cost: c, retail: p };
+      shQty += q; shCost += c; shRetail += p;
+    });
+    return { whCost, whQty, whRetail, shQty, shCost, shRetail, perRack };
+  }
+
+  function months() {
+    const now = new Date();
+    const out = [];
+    for (let k = 11; k >= 0; k--) {
+      const from = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      const to = new Date(now.getFullYear(), now.getMonth() - k + 1, 1);
+      const c = compute({ from, to });
+      if (c.total.revenue || c.spent || c.total.writeoff) {
+        out.push({ label: from.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }), c });
+      }
+    }
+    return out.reverse();
+  }
+
+  /* ---------------- отрисовка ---------------- */
+
+  const m = (n) => UI.money(n);
+  const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + UI.money(Math.abs(n));
+  const tone = (n) => n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : '#8494AC';
+
+  function bigCard(label, value, color, explain, op) {
+    return '<div class="card money-card">' +
+      (op ? '<span class="money-op">' + op + '</span>' : '') +
+      '<span class="label">' + label + '</span>' +
+      '<span class="money-val" style="color:' + (color || 'var(--text)') + '">' + value + '</span>' +
+      '<span class="money-exp">' + explain + '</span>' +
+    '</div>';
+  }
+
+  function render(host, context) {
+    ctx = context;
+    const r = range(period);
+    const d = compute(r);
+    const t = d.total;
+    const inv = inventory();
+    const P = pct();
+    const racks = ctx.racks.map(rk => {
+      const x = finish(Object.assign(blank(), d.byRack[rk.code] || {}));
+      return { rk, x, inv: inv.perRack[rk.code] || { qty: 0, cost: 0, retail: 0 } };
+    }).sort((a, b) => b.x.net - a.x.net);
+    const maxNet = Math.max(1, ...racks.map(x => Math.abs(x.x.net)));
+    const sellers = Object.keys(d.bySeller).map(k => Object.assign({ login: k }, d.bySeller[k]))
+      .sort((a, b) => b.bonus - a.bonus || b.revenue - a.revenue);
+    const items = Object.keys(d.byItem).map(k => finish(d.byItem[k])).sort((a, b) => b.gross - a.gross).slice(0, 15);
+    const cash = t.revenue - d.spent - t.bonus;
+    const periodLabel = PERIODS.find(p => p.key === period).label.toLowerCase();
+
+    host.innerHTML =
+      '<main class="page">' +
+        '<div class="page-head">' +
+          '<div><h1>Деньги</h1><p>Сколько заработали, сколько отдаём продавцам, сколько потратили и сколько лежит в товаре.</p></div>' +
+          '<div class="page-actions">' +
+            '<button class="btn btn-ghost" id="fExport">' + UI.icon('down', 15) + '<span>Выгрузить в CSV</span></button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="toolbar"><div class="filters" id="fPeriod">' +
+          PERIODS.map(p => '<button class="chip' + (period === p.key ? ' active' : '') + '" data-p="' + p.key + '">' + p.label + '</button>').join('') +
+        '</div><div class="grow"></div>' +
+        '<span style="font-size:12px;color:#64748B">' + r.from.toLocaleDateString('ru-RU') + ' — ' +
+          new Date(r.to.getTime() - 1).toLocaleDateString('ru-RU') + '</span></div>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Прибыль · ' + periodLabel + '</h2>' +
+            '<span style="font-size:12px;color:#64748B">бонус продавца сейчас ' + P + '% от выручки</span></div>' +
+          '<div class="money-row">' +
+            bigCard('Выручка', m(t.revenue), 'var(--amber)',
+              'Столько заплатили покупатели. Продано ' + UI.num(t.qty) + ' шт.') +
+            bigCard('Себестоимость', m(t.cogs), '#8494AC',
+              'Столько этот товар стоил вам по закупке.', '−') +
+            bigCard('Продавцам', m(t.bonus), 'var(--orange)',
+              P + '% от выручки продавцов — это вы им должны. Ваши личные продажи без бонуса.', '−') +
+            bigCard('Списания', m(t.writeoff), t.writeoff ? 'var(--red)' : '#8494AC',
+              'Брак, протечки, потери' + (t.writeoffQty ? ': ' + t.writeoffQty + ' шт' : '') + ' — по закупочной цене.', '−') +
+            bigCard('Чистая прибыль', signed(t.net), tone(t.net),
+              'Остаётся вам: выручка − себестоимость − продавцам − списания.' +
+              (t.revenue ? ' Это ' + Math.round(t.net / t.revenue * 100) + '% от выручки.' : ''), '=') +
+          '</div>' +
+        '</section>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Деньги в движении · ' + periodLabel + '</h2></div>' +
+          '<div class="money-row four">' +
+            bigCard('Потрачено на закупки', m(d.spent), '#7C8CF8',
+              d.buysCount ? d.buysCount + ' строк закупки. ' + Object.keys(d.byPay).map(k => UI.esc(k) + ': ' + m(d.byPay[k])).join(' · ')
+                : 'За период закупок не было.') +
+            bigCard('Пришло − ушло', signed(cash), tone(cash),
+              'Выручка минус закупки минус продавцам. Если минус — вы вложились в товар, он ещё не продан.') +
+            bigCard('Товар на складе', m(inv.whCost), '#B9C6DA',
+              UI.num(inv.whQty) + ' шт по закупке, в продаже это ' + m(inv.whRetail) + '. Сейчас, без учёта периода.') +
+            bigCard('Товар на полках СТО', m(inv.shCost), '#B9C6DA',
+              UI.num(inv.shQty) + ' шт по закупке. Когда продадут — будет ' + m(inv.shRetail) + ' выручки.') +
+          '</div>' +
+        '</section>' +
+
+        '<section class="stack-sm" style="gap:10px">' +
+          '<div class="section-head"><h2>Стеллажи — кто сколько приносит</h2>' +
+            '<span style="font-size:12px;color:#64748B">по чистой прибыли, лучшие сверху</span></div>' +
+          (racks.length
+            ? '<div class="grid-wrap"><table class="grid money-grid"><thead><tr>' +
+                '<th>Стеллаж</th><th class="r">Продано</th><th class="r">Выручка</th><th class="r">Себестоимость</th>' +
+                '<th class="r">Валовая прибыль</th><th class="r">Продавцу ' + P + '%</th><th class="r">Списания</th>' +
+                '<th class="r">Чистая прибыль</th><th class="r">Товар на полке</th>' +
+              '</tr></thead><tbody>' +
+              racks.map(({ rk, x, inv: ri }) =>
+                '<tr>' +
+                  '<td><div class="prod"><b>' + UI.esc(rk.code + ' · ' + rk.station) + '</b>' +
+                    '<small>' + UI.esc([rk.address, rk.operator].filter(Boolean).join(' · ') || '—') + '</small></div></td>' +
+                  '<td class="r">' + (x.qty ? x.qty + ' шт' : '—') + '</td>' +
+                  '<td class="r">' + (x.revenue ? UI.num(Math.round(x.revenue)) : '—') + '</td>' +
+                  '<td class="r" style="color:#8494AC">' + (x.cogs ? '−' + UI.num(Math.round(x.cogs)) : '—') + '</td>' +
+                  '<td class="r">' + (x.revenue ? UI.num(Math.round(x.gross)) + ' <span style="color:#4B5A75">' + x.marginPct + '%</span>' : '—') + '</td>' +
+                  '<td class="r" style="color:var(--orange)">' + (x.bonus ? '−' + UI.num(Math.round(x.bonus)) : '—') + '</td>' +
+                  '<td class="r" style="color:var(--red)">' + (x.writeoff ? '−' + UI.num(Math.round(x.writeoff)) : '—') + '</td>' +
+                  '<td class="r"><b style="color:' + tone(x.net) + '">' + (x.net ? signed(Math.round(x.net)) : '—') + '</b>' +
+                    '<div class="net-bar"><i style="width:' + Math.round(Math.abs(x.net) / maxNet * 100) + '%;background:' + tone(x.net) + '"></i></div></td>' +
+                  '<td class="r" style="color:#8494AC">' + (ri.qty ? ri.qty + ' шт · ' + UI.num(Math.round(ri.cost)) : '—') + '</td>' +
+                '</tr>').join('') +
+                '<tr class="total"><td><b>Итого</b></td>' +
+                  '<td class="r"><b>' + t.qty + ' шт</b></td><td class="r"><b>' + UI.num(Math.round(t.revenue)) + '</b></td>' +
+                  '<td class="r">−' + UI.num(Math.round(t.cogs)) + '</td><td class="r"><b>' + UI.num(Math.round(t.gross)) + '</b></td>' +
+                  '<td class="r">' + (t.bonus ? '−' + UI.num(Math.round(t.bonus)) : '—') + '</td>' +
+                  '<td class="r">' + (t.writeoff ? '−' + UI.num(Math.round(t.writeoff)) : '—') + '</td>' +
+                  '<td class="r"><b style="color:' + tone(t.net) + '">' + signed(Math.round(t.net)) + '</b></td>' +
+                  '<td class="r">' + inv.shQty + ' шт · ' + UI.num(Math.round(inv.shCost)) + '</td></tr>' +
+              '</tbody></table></div>'
+            : '<div class="empty-state">Стеллажей пока нет.</div>') +
+        '</section>' +
+
+        '<div class="money-2col">' +
+          '<section class="stack-sm" style="gap:10px">' +
+            '<div class="section-head"><h2>Продавцам к выплате</h2></div>' +
+            (sellers.length
+              ? '<div class="grid-wrap"><table class="grid" style="min-width:520px"><thead><tr>' +
+                  '<th>Кто продавал</th><th class="r">Продано</th><th class="r">Выручка</th><th class="r">К выплате</th>' +
+                '</tr></thead><tbody>' +
+                sellers.map(sl => '<tr><td><div class="prod"><b>' + UI.esc(sl.name) + '</b><small>' +
+                    UI.esc(Array.from(sl.racks).join(', ') || '—') + (sl.admin ? ' · вы сами, без бонуса' : '') + '</small></div></td>' +
+                  '<td class="r">' + sl.qty + ' шт</td><td class="r">' + UI.num(Math.round(sl.revenue)) + '</td>' +
+                  '<td class="r"><b style="color:var(--orange);font-size:14px">' + (sl.admin ? '—' : m(sl.bonus)) + '</b></td></tr>').join('') +
+                '</tbody></table></div>'
+              : '<div class="empty-state">Продаж за период нет.</div>') +
+          '</section>' +
+
+          '<section class="stack-sm" style="gap:10px">' +
+            '<div class="section-head"><h2>Что приносит больше всего</h2><span style="font-size:12px;color:#64748B">по валовой прибыли</span></div>' +
+            (items.length
+              ? '<div class="grid-wrap"><table class="grid" style="min-width:520px"><thead><tr>' +
+                  '<th>Товар</th><th class="r">Продано</th><th class="r">Выручка</th><th class="r">Прибыль</th><th class="r">С 1 шт</th>' +
+                '</tr></thead><tbody>' +
+                items.map(it => '<tr><td><div class="prod"><b>' + UI.esc(it.name) + '</b><small>' + UI.esc(it.brand || '—') + '</small></div></td>' +
+                  '<td class="r">' + it.qty + ' шт</td><td class="r">' + UI.num(Math.round(it.revenue)) + '</td>' +
+                  '<td class="r" style="color:' + tone(it.gross) + '">' + signed(Math.round(it.gross)) + '</td>' +
+                  '<td class="r" style="color:#8494AC">' + (it.qty ? UI.num(Math.round(it.gross / it.qty)) : '—') + '</td></tr>').join('') +
+                '</tbody></table></div>'
+              : '<div class="empty-state">Продаж за период нет.</div>') +
+          '</section>' +
+        '</div>' +
+
+        (() => {
+          const ms = months();
+          if (!ms.length) return '';
+          return '<section class="stack-sm" style="gap:10px">' +
+            '<div class="section-head"><h2>По месяцам</h2><span style="font-size:12px;color:#64748B">последние 12 месяцев, где что-то было</span></div>' +
+            '<div class="grid-wrap"><table class="grid money-grid"><thead><tr>' +
+              '<th>Месяц</th><th class="r">Выручка</th><th class="r">Себестоимость</th><th class="r">Продавцам</th>' +
+              '<th class="r">Списания</th><th class="r">Чистая прибыль</th><th class="r">Потрачено на закупки</th>' +
+            '</tr></thead><tbody>' +
+            ms.map(x => '<tr><td style="text-transform:capitalize">' + x.label + '</td>' +
+              '<td class="r">' + UI.num(Math.round(x.c.total.revenue)) + '</td>' +
+              '<td class="r" style="color:#8494AC">−' + UI.num(Math.round(x.c.total.cogs)) + '</td>' +
+              '<td class="r" style="color:var(--orange)">−' + UI.num(Math.round(x.c.total.bonus)) + '</td>' +
+              '<td class="r" style="color:var(--red)">' + (x.c.total.writeoff ? '−' + UI.num(Math.round(x.c.total.writeoff)) : '—') + '</td>' +
+              '<td class="r"><b style="color:' + tone(x.c.total.net) + '">' + signed(Math.round(x.c.total.net)) + '</b></td>' +
+              '<td class="r" style="color:#7C8CF8">' + UI.num(Math.round(x.c.spent)) + '</td></tr>').join('') +
+            '</tbody></table></div></section>';
+        })() +
+
+        '<div class="card flat" style="font-size:12px;color:#8494AC;line-height:1.6">' +
+          '<b style="color:#B9C6DA">Как считается.</b> Выручка и себестоимость — по каждой продаже с ценами на момент продажи; ' +
+          'отменённые продажи не считаются. Бонус продавца — текущий процент из «Настроек» от выручки его продаж; ' +
+          'продажи, которые вы отметили сами, без бонуса. Списания — брак и потери по закупочной цене. ' +
+          'Закупки — по дате поставки. Товар на складе и на полках — на сегодня, по закупочной цене.' +
+        '</div>' +
+      '</main>';
+
+    host.querySelector('#fPeriod').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-p]');
+      if (!b) return;
+      period = b.dataset.p;
+      render(host, ctx);
+    });
+    host.querySelector('#fExport').addEventListener('click', () => exportCsv(racks, sellers, t, d, periodLabel));
+  }
+
+  function exportCsv(racks, sellers, t, d, label) {
+    const R = (n) => Math.round(n);
+    const rows = [['Деньги · ' + label], [],
+      ['Стеллаж', 'СТО', 'Продано шт', 'Выручка', 'Себестоимость', 'Валовая прибыль', 'Продавцу', 'Списания', 'Чистая прибыль', 'Товар на полке шт', 'Товар на полке по закупке']];
+    racks.forEach(({ rk, x, inv }) => rows.push([rk.code, rk.station, x.qty, R(x.revenue), R(x.cogs), R(x.gross), R(x.bonus), R(x.writeoff), R(x.net), inv.qty, R(inv.cost)]));
+    rows.push(['Итого', '', t.qty, R(t.revenue), R(t.cogs), R(t.gross), R(t.bonus), R(t.writeoff), R(t.net)]);
+    rows.push([], ['Потрачено на закупки', R(d.spent)], [], ['Продавец', 'Стеллажи', 'Продано шт', 'Выручка', 'К выплате']);
+    sellers.forEach(s => rows.push([s.name, Array.from(s.racks).join(', '), s.qty, R(s.revenue), s.admin ? 0 : R(s.bonus)]));
+    UI.downloadFile('dengi-' + UI.today() + '.csv', UI.csv(rows));
+    UI.toast('Отчёт выгружен', 'ok');
+  }
+
+  return { render };
+})();
+
 
 
 /* ============================================================
@@ -6057,6 +7090,13 @@ window.LC_SETTINGS = (function () {
 
   let ctx = null;
 
+  // общие настройки сохраняются в базу с небольшой задержкой — сообщаем, чем кончилось
+  window.addEventListener('lc-settings-saved', (e) => {
+    const el = document.getElementById('sSaveState');
+    if (e.detail.error) { UI.toast('Настройки не сохранились: ' + e.detail.error, 'err'); if (el) el.textContent = ''; return; }
+    if (el) { el.textContent = 'Сохранено ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); el.style.color = 'var(--green)'; }
+  });
+
   /* ---------------- что можно крутить ---------------- */
 
   const RULES = [
@@ -6064,7 +7104,7 @@ window.LC_SETTINGS = (function () {
       hint: 'Ниже этой доли вместимости позиция подсвечивается оранжевым' },
     { key: 'cancelWindowMin', label: 'Окно отмены продажи',    unit: 'мин', min: 0, max: 120,  step: 5,
       hint: 'Сколько минут продавец может отменить свою продажу' },
-    { key: 'bonusPercent',    label: 'Бонус продавца',         unit: '%',  min: 0,  max: 50,   step: 1,
+    { key: 'bonusPercent',    label: 'Бонус продавца',         unit: '%',  min: 0,  max: 100,  step: 1,
       hint: 'Процент от выручки в блоке «Итоги смены»' },
     { key: 'defaultMax',      label: 'Вместимость по умолчанию', unit: 'шт', min: 1, max: 100, step: 1,
       hint: 'Подставляется, когда ставите новую позицию на стеллаж' },
@@ -6140,8 +7180,10 @@ window.LC_SETTINGS = (function () {
       '<main class="page">' +
         '<div class="page-head">' +
           '<div><h1>Настройки</h1>' +
-            '<p>Крутите значения — экран меняется сразу. Чтобы правки увидели все, ' +
-            'скачайте config.js и положите его рядом с index.html.</p></div>' +
+            (window.LC_OVERRIDES.shared
+              ? '<p>Крутите значения — экран меняется сразу, правки сохраняются в общей базе и действуют у всех.</p></div>'
+              : '<p>Крутите значения — экран меняется сразу. Чтобы правки увидели все, ' +
+                'скачайте config.js и положите его рядом с index.html.</p></div>') +
           '<div class="page-actions">' +
             '<button class="btn btn-ghost" id="sReset">' + UI.icon('undo', 15) +
               '<span>Сбросить правки' + (n ? ' · ' + n : '') + '</span></button>' +
@@ -6150,6 +7192,18 @@ window.LC_SETTINGS = (function () {
           '</div>' +
         '</div>' +
 
+        (window.LC_OVERRIDES.shared
+          ? '<div class="card flat" style="display:flex;gap:12px;align-items:flex-start">' +
+              UI.icon(STORE.settingsReady() ? 'check' : 'warn', 16, STORE.settingsReady() ? 'var(--green)' : 'var(--red)') +
+              '<div style="font-size:13px;color:#B9C6DA;line-height:1.55">' +
+              (STORE.settingsReady()
+                ? 'Настройки хранятся <b>в общей базе</b>: бонус, пороги, надписи и цвета сразу видят все — ' +
+                  'продавцу достаточно обновить страницу. <span id="sSaveState" style="color:#64748B"></span>'
+                : '<b>В базе нет таблицы для общих настроек</b> — выполните fix-v7.sql в Supabase → SQL Editor. ' +
+                  'Пока её нет, правки из этой панели продавцы не увидят.') +
+              '</div></div>'
+          : '') +
+        (window.LC_OVERRIDES.shared ? '' :
         '<div class="card flat" style="display:flex;gap:12px;align-items:flex-start">' +
           UI.icon('warn', 16, 'var(--amber)') +
           '<div style="font-size:13px;color:#B9C6DA;line-height:1.55">' +
@@ -6160,7 +7214,7 @@ window.LC_SETTINGS = (function () {
             'Подобрали — нажмите «Скачать config.js» и залейте файл в репозиторий: тогда эти значения увидят продавцы. ' +
             'Ключи Supabase применяются после перезагрузки страницы.' +
           '</div>' +
-        '</div>' +
+        '</div>') +
 
         '<section class="stack">' +
           '<div class="section-head"><h2>Правила</h2>' +
@@ -6199,13 +7253,13 @@ window.LC_SETTINGS = (function () {
           '<div class="section-head"><h2>Данные</h2></div>' +
           '<div class="card flat row" style="gap:12px;flex-wrap:wrap">' +
             '<button class="btn btn-ghost btn-sm" id="sDump">Скачать все данные (JSON)</button>' +
+            '<button class="btn btn-danger btn-sm" id="sClearHist">Очистить историю…</button>' +
             (STORE.mode === 'demo'
               ? '<button class="btn btn-danger btn-sm" id="sSeed">Очистить все данные</button>'
               : '') +
             '<span style="font-size:12px;color:#64748B">Режим: ' +
-              (STORE.mode === 'demo'
-                ? 'демо, данные в браузере'
-                : 'общая база Supabase — чистить только через панель Supabase') + '</span>' +
+              (STORE.mode === 'demo' ? 'демо, данные в браузере' : 'общая база Supabase') +
+              ' · история — закупки, движения, заявки; прайс и сотрудники не трогаются</span>' +
           '</div>' +
         '</section>' +
       '</main>';
@@ -6346,7 +7400,7 @@ window.LC_SETTINGS = (function () {
         'Значения вернутся к тем, что лежат в config.js (или к заводским, если файла нет). ' +
         'Данные о стеллажах и продажах не трогаем.', 'Сбросить', 'btn-danger');
       if (!ok) return;
-      window.LC_OVERRIDES.clear();
+      try { await window.LC_OVERRIDES.clear(); } catch (e) { /* перезагрузка покажет, что вышло */ }
       location.reload();
     });
 
@@ -6359,6 +7413,9 @@ window.LC_SETTINGS = (function () {
       UI.downloadFile('lube-control-' + UI.today() + '.json', JSON.stringify(dump, null, 2), 'application/json');
       UI.toast('Данные выгружены', 'ok');
     });
+
+    const ch = host.querySelector('#sClearHist');
+    if (ch) ch.addEventListener('click', () => window.LC_MOVES.clearModal(ctx));
 
     const seed = host.querySelector('#sSeed');
     if (seed) seed.addEventListener('click', async () => {
@@ -6579,8 +7636,10 @@ window.LC_SELLER = (function () {
         '</span>' +
       '</div>' +
       '<div class="title"><b' + (dim ? ' style="color:#8494AC"' : '') + '>' + UI.esc(i.name) + '</b>' +
-        '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) +
-        (i.price ? ' · ' + UI.money(i.price) : '') + '</small></div>' +
+        '<small>' + UI.esc([i.brand, i.volume].filter(Boolean).join(' · ')) + '</small></div>' +
+      '<div class="good-price' + (dim ? ' dim' : '') + '">' +
+        (i.price ? UI.money(i.price) : '<span style="font-size:14px;color:var(--orange)">цена не указана</span>') +
+        '<small>за 1 шт</small></div>' +
       '<div class="stack-sm" style="gap:7px">' +
         '<div class="row-between" style="align-items:baseline">' +
           '<span class="count"' + (st !== 'ok' ? ' style="color:' +
@@ -6591,7 +7650,8 @@ window.LC_SELLER = (function () {
       '</div>' +
       (i.qty > 0
         ? '<button class="btn btn-primary btn-lg btn-block" data-act="sell" data-item="' + i.id + '">' +
-            UI.icon('minus', 15, '#12161F', 2.2) + '<span>' + UI.esc(CFG.texts.sellBtn) + '</span></button>'
+            UI.icon('minus', 15, '#12161F', 2.2) + '<span>' + UI.esc(CFG.texts.sellBtn) +
+            (i.price ? ' · ' + UI.money(i.price) : '') + '</span></button>'
         : '<button class="btn btn-danger btn-lg btn-block" data-act="request" data-item="' + i.id + '">' +
             (openRequest
               ? (openRequest.status === 'packed' ? 'Поставка едет' : 'Заявка отправлена')
@@ -6625,7 +7685,8 @@ window.LC_SELLER = (function () {
   }
 
   function renderSide() {
-    const sales = todayOps.filter(o => o.type === 'sale' && !o.cancelled);
+    // в итоги смены и бонус — только свои продажи (продажи администратора на этой точке не в счёт)
+    const sales = todayOps.filter(o => o.type === 'sale' && !o.cancelled && o.user_login === user.login);
     const qty = sales.reduce((s, o) => s + o.qty, 0);
     const sum = sales.reduce((s, o) => s + Number(o.amount || 0), 0);
     const bonus = Math.round(sum * CFG.bonusPercent / 100);
@@ -6731,11 +7792,22 @@ window.LC_SELLER = (function () {
 
   /** Приём поставки — то же окно со счётчиками, что у администратора. */
   async function acceptDelivery() {
+    // если администратор отметил, что именно собрал, — подставляем эти цифры и не даём принять больше
+    const packed = openRequest && openRequest.status === 'packed' && Array.isArray(openRequest.packed_items) &&
+      openRequest.packed_items.length ? openRequest.packed_items : null;
+    const cap = {};
+    if (packed) packed.forEach(x => { cap[x.item_id] = (cap[x.item_id] || 0) + (Number(x.qty) || 0); });
     const plan = await window.LC_ADMIN.fillModal({
       rack,
       title: 'Принять поставку',
-      subtitle: 'Отметьте, сколько канистр реально привезли',
-      okLabel: 'Принял, всё на полке'
+      subtitle: packed
+        ? 'Администратор собрал ' + packed.reduce((s, x) => s + (Number(x.qty) || 0), 0) +
+          ' шт. Проверьте, что привезли, — если меньше, уменьшите число.'
+        : 'Отметьте, сколько канистр реально привезли',
+      okLabel: 'Принял, всё на полке',
+      initial: packed ? cap : null,
+      cap: packed ? cap : null,
+      hideCost: true
     });
     if (!plan) return;
     await act(
@@ -6944,7 +8016,10 @@ window.LC_SELLER = (function () {
 
   /* ---------- экраны ---------- */
 
-  function enter(user) {
+  async function enter(user) {
+    // общие настройки (бонус, пороги, надписи) — из базы, одинаковые у всех
+    try { await AUTH.withTimeout(STORE.loadSettings(user), 6000, 'настройки'); } catch (e) { /* работаем на config.js */ }
+    UI.applyTheme();
     loginScreen.classList.add('hidden');
     shell.classList.remove('hidden');
     pwInput.value = '';
