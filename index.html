@@ -919,6 +919,86 @@ tr.low-margin td:first-child { box-shadow: inset 3px 0 0 var(--orange); }
   .topbar > .row:last-child { gap: 8px !important; flex-shrink: 0; }
   .menu-btn { padding: 0 10px; }
 }
+
+/* ---------- Версия 11: мобильная страница продавца ---------- */
+
+.switch { position: relative; display: inline-block; width: 44px; height: 26px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.switch i { position: absolute; inset: 0; border-radius: 999px; background: #1B2740; border: 1px solid var(--line-strong); transition: background .15s; }
+.switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: var(--muted); transition: transform .15s, background .15s; }
+.switch input:checked + i { background: rgba(242,183,5,.25); border-color: rgba(242,183,5,.5); }
+.switch input:checked + i::after { transform: translateX(18px); background: var(--amber); }
+.switch input:focus-visible + i { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.menu-list { width: min(300px, calc(100vw - 24px)); gap: 4px; padding: 8px; }
+.menu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 10px; border-radius: 10px; color: var(--text-2);
+}
+.menu-item:hover { background: #17223A; color: var(--text); }
+.menu-item span { display: flex; flex-direction: column; min-width: 0; }
+.menu-item b { font-size: 13px; font-weight: 600; color: var(--text); }
+.menu-item small { font-size: 11px; color: var(--muted-2); }
+
+.rack-headline { display: flex; gap: 12px; align-items: flex-start; }
+#rackPhoto:empty { display: none; }
+.rack-thumb { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; cursor: zoom-in; border: 1px solid var(--line); display: block; }
+.rack-h { font-family: var(--display); font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+.rack-info { margin-top: 6px; }
+.rack-info:empty { display: none; }
+.rack-info .desc { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+.log-box summary, .hint-box summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.log-box summary::-webkit-details-marker, .hint-box summary::-webkit-details-marker { display: none; }
+.log-box summary::after, .hint-box summary::after {
+  content: ''; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .15s; flex-shrink: 0;
+}
+.log-box[open] summary::after, .hint-box[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
+.log-box summary .display { flex: 1; }
+.log-meta { display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: #64748B; }
+.log-meta b { color: var(--text-2); font-size: 13px; }
+.hint-box { padding: 12px 16px; }
+.hint-box summary { font-size: 12px; font-weight: 600; color: #F2B705; }
+
+.sale-row { grid-template-columns: 62px minmax(0, 1fr) 92px auto; }
+
+.shift-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.shift-stats b { display: block; margin-top: 4px; font-size: 18px; font-weight: 600; white-space: nowrap; }
+.shift-stats b small { font-size: 12px; color: #6B5F3A; }
+.shift-card .label { letter-spacing: 0.08em; font-size: 10px; }
+
+@media (max-width: 560px) {
+  .seller-title { display: none; }
+  .seller-actions { flex-wrap: nowrap; }
+  .seller-actions .menu-wrap { flex-shrink: 0; }
+  .seller-actions .menu-wrap .btn { flex-grow: 0; }
+  .log-meta #todayDate { display: none; }
+
+  /* товар — во всю ширину, компактно: название и цена в строку, остаток, кнопка */
+  .goods-grid { grid-template-columns: 1fr; gap: 10px; }
+  .good {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title price" "stock top" "btn btn"; gap: 10px 12px; padding: 13px 14px;
+  }
+  .good .title { grid-area: title; align-self: center; }
+  .good .good-price { grid-area: price; font-size: 20px; padding: 6px 10px; flex-direction: column; align-items: flex-end; gap: 0; }
+  .good .good-price small { font-size: 10px; }
+  .good .top { grid-area: top; justify-content: flex-end; align-self: end; }
+  .good .top svg { display: none; }
+  .good > .stack-sm { grid-area: stock; }
+  .good > .btn { grid-area: btn; }
+  .good .btn-lg { min-height: 44px; white-space: nowrap; }
+
+  .sale-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "n n x" "t a x"; row-gap: 2px; column-gap: 10px; }
+  .sale-row .s-n { grid-area: n; }
+  .sale-row .s-t { grid-area: t; }
+  .sale-row .s-a { grid-area: a; color: var(--text-2); }
+  .sale-row .s-x { grid-area: x; }
+  .shift-stats b { font-size: 15px; }
+}
 </style>
 </head>
 <body>
@@ -1035,6 +1115,13 @@ if (!window.supabase) {
       photoWidth: 900,       // до какой ширины ужимать фото стеллажа, px
       photoQuality: 72,      // качество JPEG для фото, %
       minMargin: 20          // наценка ниже этого % подсвечивается в прайсе
+    },
+
+    /* ---------- 3б. Что показывать продавцу ---------- */
+
+    features: {
+      shiftSummary: false,   // при закрытии смены показать продано, выручку и бонус
+      shiftCard: true        // карточка «Итоги смены» на странице продавца
     },
 
     /* ---------- 3а. Связь с администрацией ----------
@@ -3380,6 +3467,7 @@ if (!window.supabase) {
     history: '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v3.5h3.5"/><path d="M12 8v4l2.6 1.8"/>',
     trendUp: '<path d="m4 16 5-5 3.5 3.5L20 7"/><path d="M15 7h5v5"/>',
     trendDown: '<path d="m4 8 5 5 3.5-3.5L20 17"/><path d="M15 17h5v-5"/>',
+    more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
     coins: '<ellipse cx="9" cy="7" rx="5" ry="2.4"/><path d="M4 7v4c0 1.3 2.2 2.4 5 2.4s5-1.1 5-2.4V7"/><path d="M10 16.2c.9.2 1.9.2 3 .2 2.8 0 5-1.1 5-2.4v-4"/><path d="M14 10.2c2.3.2 4-.7 4-1.9"/><path d="M4 11v4c0 1.3 2.2 2.4 5 2.4"/>',
     can: '<path d="M6 10h13a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Z"/><path d="M10 10V6h7v4"/><path d="M19 13h4l2 4v6"/>'
   };
@@ -3983,7 +4071,7 @@ if (!window.supabase) {
       if (window.LC_CHAT) window.LC_CHAT.openDrawer();
       return;
     }
-    if (!e.target.closest('.menu-pop')) closeMenus();
+    if (!e.target.closest('.menu-pop') && !e.target.closest('[data-more-menu]')) closeMenus();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenus(); });
 
@@ -8819,6 +8907,12 @@ window.LC_SETTINGS = (function () {
         '</section>' +
 
         '<section class="stack">' +
+          '<div class="section-head"><h2>Что видит продавец</h2>' +
+            '<span style="font-size:12px;color:#64748B">включается и выключается сразу у всех</span></div>' +
+          '<div class="set-grid">' + FEATURES.map(featureRow).join('') + '</div>' +
+        '</section>' +
+
+        '<section class="stack">' +
           '<div class="section-head"><h2>Правила</h2>' +
             '<span style="font-size:12px;color:#64748B">меняется на лету</span></div>' +
           '<div class="set-grid">' + RULES.map(ruleRow).join('') + '</div>' +
@@ -8880,6 +8974,21 @@ window.LC_SETTINGS = (function () {
         '<span class="set-unit">' + r.unit + '</span>' +
       '</div>' +
     '</div>';
+  }
+
+  const FEATURES = [
+    { key: 'shiftSummary', label: 'Итог при закрытии смены',
+      hint: 'В окне «Закончить смену» показать, сколько продано, выручку и бонус. Выключено — просто «Закончить смену?»' },
+    { key: 'shiftCard', label: 'Карточка «Итоги смены»',
+      hint: 'Продано, выручка и бонус за сегодня на странице продавца' }
+  ];
+
+  function featureRow(f) {
+    const on = !!(window.LC_CONFIG.features || {})[f.key];
+    return '<label class="set-row" data-feature="' + f.key + '" style="cursor:pointer">' +
+      '<div class="set-label"><b>' + UI.esc(f.label) + '</b><small>' + UI.esc(f.hint) + '</small></div>' +
+      '<div class="set-ctl"><span class="switch"><input type="checkbox"' + (on ? ' checked' : '') + '><i></i></span></div>' +
+    '</label>';
   }
 
   function contactRow(k) {
@@ -8973,6 +9082,15 @@ window.LC_SETTINGS = (function () {
       };
       range.addEventListener('input', e => apply(e.target.value));
       num.addEventListener('input', e => apply(e.target.value));
+    });
+
+    // что видит продавец
+    host.querySelectorAll('[data-feature]').forEach(row => {
+      const el = row.querySelector('input');
+      el.addEventListener('change', () => {
+        set('features.' + row.dataset.feature, el.checked);
+        UI.toast((el.checked ? 'Включено: ' : 'Выключено: ') + FEATURES.find(f => f.key === row.dataset.feature).label, 'ok');
+      });
     });
 
     // связь с администрацией
@@ -9125,6 +9243,11 @@ window.LC_SETTINGS = (function () {
         (i < C.categories.length - 1 ? ',' : ''));
     });
     L.push('  ],');
+    L.push('');
+    L.push('  /* ---------- Что видит продавец ---------- */');
+    L.push('  features: {');
+    FEATURES.forEach((f, i) => { L.push('    ' + f.key + ': ' + (!!(C.features || {})[f.key]) + (i < FEATURES.length - 1 ? ',' : '') + '  // ' + f.label.toLowerCase()); });
+    L.push('  },');
     L.push('');
     L.push('  /* ---------- Связь с администрацией (кнопки у продавцов и курьеров) ---------- */');
     L.push('  contacts: {');
@@ -9608,25 +9731,22 @@ window.LC_SELLER = (function () {
     $('todayDate').textContent = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
     const tel = String(rack.phone || '').replace(/[^\d+]/g, '');
-    $('rackInfo').innerHTML =
-      (rack.description ? '<div style="white-space:pre-wrap">' + UI.esc(rack.description) + '</div>' : '') +
-      '<div class="line">' +
+    const hasInfo = rack.description || rack.phone || rack.hours;
+    $('rackInfo').innerHTML = !hasInfo ? '' :
+      (rack.description ? '<div class="desc">' + UI.esc(rack.description) + '</div>' : '') +
+      ((rack.phone || rack.hours) ? '<div class="line">' +
         (rack.phone ? '<span>' + UI.icon('phone', 13) + ' <a href="tel:' + UI.esc(tel) + '">' + UI.esc(rack.phone) + '</a></span>' : '') +
         (rack.hours ? '<span>' + UI.icon('clock', 13) + ' ' + UI.esc(rack.hours) + '</span>' : '') +
-        (!rack.description && !rack.phone && !rack.hours
-          ? '<span>Добавьте описание, телефон точки и часы работы — кнопка «Изменить стеллаж»</span>' : '') +
-      '</div>';
+      '</div>' : '');
 
     $('shiftNote').innerHTML = rack.shift_open ? ''
       : '<div class="shift-note"><span>' + UI.icon('clock', 15) + ' Смена не начата — администратор видит, что вас нет на месте.</span>' +
         '<button class="btn btn-primary btn-sm" data-shift="open">Начать смену</button></div>';
 
+    // фото — маленькой миниатюрой у названия, по нажатию во весь экран; нет фото — ничего не показываем
     $('rackPhoto').innerHTML = rack.photo
-      ? '<figure class="photo-hero" style="margin:0" data-photo>' +
-          '<img src="' + rack.photo + '" alt="Фото стеллажа ' + UI.esc(rack.code) + '">' +
-          '<figcaption>' + UI.esc(rack.code + ' · ' + rack.station) + ' — так стеллаж должен выглядеть</figcaption>' +
-        '</figure>'
-      : '<button class="photo-add" type="button" data-edit-rack>' + UI.icon('camera', 20) + '<span>Добавить фото стеллажа</span></button>';
+      ? '<img class="rack-thumb" data-photo src="' + rack.photo + '" alt="Фото стеллажа ' + UI.esc(rack.code) + '" title="Как должен выглядеть стеллаж">'
+      : '';
 
     $('goods').innerHTML = rack.items.length
       ? rack.items.map(goodCard).join('')
@@ -9672,25 +9792,28 @@ window.LC_SELLER = (function () {
 
   function renderLog() {
     const sales = todayOps.filter(o => o.type === 'sale');
+    const live = sales.filter(o => !o.cancelled);
+    const cnt = $('logCount');
+    if (cnt) cnt.textContent = live.length ? live.reduce((s, o) => s + o.qty, 0) + ' шт' : '';
     if (!sales.length) {
       $('log').innerHTML = '<div style="font-size:13px;color:#64748B;padding:8px 0">' +
-        'Сегодня продаж ещё не было. Отметьте первую — кнопкой на карточке масла.</div>';
+        'Сегодня продаж ещё не было. Отметьте первую — кнопкой на карточке товара.</div>';
       return;
     }
     $('log').innerHTML = '<div class="log-list">' + sales.map(o => {
       const ageMin = (Date.now() - new Date(o.created_at).getTime()) / 60000;
       const canCancel = !o.cancelled && ageMin <= CFG.cancelWindowMin;
-      return '<div class="log-row" style="grid-template-columns:62px minmax(0,1fr) 92px auto">' +
-        '<span class="mono" style="font-size:12px;color:#8494AC">' + UI.time(o.created_at) + '</span>' +
-        '<span class="ellipsis"' + (o.cancelled ? ' style="color:#4B5A75;text-decoration:line-through"' : '') + '>' +
+      return '<div class="log-row sale-row">' +
+        '<span class="mono s-t" style="font-size:12px;color:#8494AC">' + UI.time(o.created_at) + '</span>' +
+        '<span class="ellipsis s-n"' + (o.cancelled ? ' style="color:#4B5A75;text-decoration:line-through"' : '') + '>' +
           UI.esc(o.item_name) + (o.brand ? ' · ' + UI.esc(o.brand) : '') + ' · ' + o.qty + ' шт</span>' +
-        '<span class="mono" style="font-size:13px' + (o.cancelled ? ';color:#4B5A75' : '') + '">' +
+        '<span class="mono s-a" style="font-size:13px' + (o.cancelled ? ';color:#4B5A75' : '') + '">' +
           UI.money(o.amount) + '</span>' +
-        (o.cancelled
+        '<span class="s-x">' + (o.cancelled
           ? '<span style="font-size:12px;color:#64748B">отменено</span>'
           : canCancel
             ? '<button class="btn btn-ghost btn-sm" data-act="cancel" data-op="' + o.id + '">Отменить</button>'
-            : '<span style="font-size:12px;color:#3DDC84">учтено</span>') +
+            : '<span style="font-size:12px;color:#3DDC84">учтено</span>') + '</span>' +
       '</div>';
     }).join('') + '</div>';
   }
@@ -9705,23 +9828,9 @@ window.LC_SELLER = (function () {
     const income = todayOps.filter(o => o.type === 'restock' || o.type === 'delivery')
       .reduce((s, o) => s + o.qty, 0);
 
+    const F = CFG.features || {};
     $('side').innerHTML =
-      '<section class="card shift-card stack-sm" style="gap:18px">' +
-        '<span class="display" style="font-size:14px;font-weight:600">Итоги смены</span>' +
-        '<div><div class="label">Продано</div>' +
-          '<div class="mono" style="font-size:30px;font-weight:600">' + qty +
-          ' <span style="font-size:16px;color:#6B5F3A">шт</span></div></div>' +
-        '<div><div class="label">Выручка</div>' +
-          '<div class="mono" style="font-size:24px;font-weight:600">' + UI.money(sum) + '</div></div>' +
-        (income ? '<div><div class="label">Принято за смену</div>' +
-          '<div class="mono" style="font-size:18px;font-weight:600;color:#3DDC84">+' + income + ' шт</div></div>' : '') +
-        '<div class="row-between" style="border-top:1px solid #2A2412;padding-top:14px">' +
-          '<span style="font-size:13px;color:#B9C6DA">Ваш бонус ' + CFG.bonusPercent + '%</span>' +
-          '<span class="mono" style="font-size:16px;font-weight:600;color:#F2B705">' + UI.money(bonus) + '</span>' +
-        '</div>' +
-      '</section>' +
-
-      '<section class="card stack-sm" style="gap:14px">' +
+      '<section class="card stack-sm" style="gap:12px">' +
         '<span class="display" style="font-size:14px;font-weight:600">Пополнение</span>' +
         (() => {
           const s = supplyState();
@@ -9730,16 +9839,27 @@ window.LC_SELLER = (function () {
             '<div style="min-width:0"><b>' + UI.esc(s.title) + '</b>' +
             '<small>' + UI.esc(s.sub) + '</small></div></div>';
         })() +
+        // кнопка приёма появляется, только когда есть что принимать
         (packedItems()
           ? '<button class="btn btn-primary btn-block" id="btnDelivery">' + UI.esc(CFG.texts.deliveryBtn) + '</button>'
-          : '<button class="btn btn-ghost btn-block" id="btnDelivery" disabled>' + UI.esc(CFG.texts.deliveryBtn) + '</button>' +
-            '<span style="font-size:11px;color:#64748B;text-align:center">Кнопка оживёт, когда администратор соберёт поставку</span>') +
+          : '') +
       '</section>' +
 
-      '<section class="card flat stack-sm" style="gap:9px">' +
-        '<span style="font-size:12px;font-weight:600;color:#F2B705;letter-spacing:.06em;text-transform:uppercase">Подсказка</span>' +
-        '<span style="font-size:13px;color:#8494AC;line-height:1.55">' + UI.esc(CFG.texts.hint) + '</span>' +
-      '</section>';
+      (F.shiftCard === false ? '' :
+        '<section class="card shift-card stack-sm" style="gap:12px">' +
+          '<span class="display" style="font-size:14px;font-weight:600">Итоги смены</span>' +
+          '<div class="shift-stats">' +
+            '<div><div class="label">Продано</div><b class="mono">' + qty + ' <small>шт</small></b></div>' +
+            '<div><div class="label">Выручка</div><b class="mono">' + UI.money(sum) + '</b></div>' +
+            '<div><div class="label">Бонус ' + CFG.bonusPercent + '%</div><b class="mono" style="color:#F2B705">' + UI.money(bonus) + '</b></div>' +
+          '</div>' +
+          (income ? '<div style="font-size:12px;color:#3DDC84">Принято за смену: +' + income + ' шт</div>' : '') +
+        '</section>') +
+
+      '<details class="card flat hint-box">' +
+        '<summary>Подсказка</summary>' +
+        '<div style="font-size:13px;color:#8494AC;line-height:1.55;margin-top:8px">' + UI.esc(CFG.texts.hint) + '</div>' +
+      '</details>';
   }
 
   /* ---------------- действия ---------------- */
@@ -9891,7 +10011,6 @@ window.LC_SELLER = (function () {
   function bind() {
     $('btnRequest').innerHTML = UI.icon('warn', 15) + '<span>' + UI.esc(CFG.texts.requestBtn) + '</span>';
     $('btnRequest').addEventListener('click', () => rack && requestRestock(null));
-    $('btnAudit').addEventListener('click', () => rack && auditModal());
 
     $('rackPhoto').addEventListener('click', () => {
       if (rack && rack.photo) UI.photoModal(rack.photo, rack.code + ' · ' + rack.station);
@@ -9914,12 +10033,32 @@ window.LC_SELLER = (function () {
       if (e.target.closest('#btnDelivery')) acceptDelivery();
     });
 
-    // смена, правка стеллажа — кнопки есть и в шапке, и на странице
+    // смена — в шапке и на странице; «Ещё» — сверка и «Мой стеллаж»
     document.addEventListener('click', (e) => {
       const sh = e.target.closest('[data-shift]');
       if (sh) { toggleShift(sh.dataset.shift === 'open'); return; }
-      if (e.target.closest('[data-edit-rack]')) editRack();
+      const more = e.target.closest('[data-more-menu]');
+      if (more) {
+        const wrap = more.closest('.menu-wrap');
+        const open = wrap.querySelector('.menu-pop');
+        UI.closeMenus();
+        if (!open) wrap.insertAdjacentHTML('beforeend', moreMenuHtml());
+        return;
+      }
+      if (e.target.closest('[data-edit-rack]')) { UI.closeMenus(); editRack(); return; }
+      if (e.target.closest('[data-audit]')) { UI.closeMenus(); if (rack) auditModal(); }
     });
+    if (window.innerWidth > 900) $('logBox').open = true;
+  }
+
+  function moreMenuHtml() {
+    const item = (attr, ic, title, sub) =>
+      '<button class="menu-item" type="button" ' + attr + '>' + UI.icon(ic, 18) +
+        '<span><b>' + title + '</b><small>' + sub + '</small></span></button>';
+    return '<div class="menu-pop menu-list" role="menu">' +
+      item('data-audit', 'scale', UI.esc(CFG.texts.auditBtn), 'пересчитать канистры на полке') +
+      item('data-edit-rack', 'camera', 'Мой стеллаж', 'фото, описание, телефон, часы работы') +
+    '</div>';
   }
 
   /* ---------------- смена: работаю / не работаю ---------------- */
@@ -9955,6 +10094,16 @@ window.LC_SELLER = (function () {
     const qty = mine.reduce((s, o) => s + o.qty, 0);
     const sum = mine.reduce((s, o) => s + Number(o.amount || 0), 0);
     const bonus = Math.round(sum * CFG.bonusPercent / 100);
+    const note = 'продано ' + qty + ' шт на ' + UI.money(sum);
+    // итог смены (продано, выручка, бонус) — только если администратор включил в «Настройках»
+    if (!(CFG.features || {}).shiftSummary) {
+      const ok = await UI.confirmBox('Закончить смену?',
+        (rack.shift_at ? 'Смена идёт с ' + UI.time(rack.shift_at) + '. ' : '') + 'Администратор увидит, что вас нет на месте.',
+        'Закончить смену', 'btn-danger');
+      if (!ok) return;
+      await act(() => STORE.setShift(rack.code, false, user, note), 'Смена закончена');
+      return;
+    }
     const ok = await UI.modal({
       title: 'Закончить смену?',
       subtitle: rack.shift_at ? 'Смена идёт с ' + UI.time(rack.shift_at) + ' · ' + UI.ago(rack.shift_at).replace(' назад', '') : '',
@@ -9970,7 +10119,7 @@ window.LC_SELLER = (function () {
       ]
     });
     if (!ok) return;
-    await act(() => STORE.setShift(rack.code, false, user, 'продано ' + qty + ' шт на ' + UI.money(sum)), 'Смена закончена');
+    await act(() => STORE.setShift(rack.code, false, user, note), 'Смена закончена');
   }
 
   /* ---------------- мой стеллаж: фото, описание, телефон ---------------- */
@@ -10059,31 +10208,33 @@ window.LC_SELLER = (function () {
   const template = () =>
     '<main class="page">' +
       '<div class="page-head">' +
-        '<div><h1>' + UI.esc(CFG.texts.sellerTitle) + '</h1>' +
+        '<div class="seller-title"><h1>' + UI.esc(CFG.texts.sellerTitle) + '</h1>' +
         '<p>' + UI.esc(CFG.texts.sellerSubtitle) + '</p></div>' +
-        '<div class="page-actions">' +
-          '<button class="btn btn-ghost" id="btnAudit">' + UI.esc(CFG.texts.auditBtn) + '</button>' +
+        '<div class="page-actions seller-actions">' +
           '<button class="btn btn-warn" id="btnRequest"></button>' +
+          '<div class="menu-wrap">' +
+            '<button class="btn btn-ghost" type="button" data-more-menu aria-haspopup="true" title="Ещё">' +
+              UI.icon('more', 16, 'currentColor', 2.4) + '<span class="more-t">Ещё</span></button>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div class="split">' +
         '<div class="stack">' +
           '<div id="shiftNote"></div>' +
-          '<div class="section-head">' +
-            '<div style="min-width:0"><h2 id="rackTitle">Мой стеллаж</h2>' +
-              '<span class="mono" style="font-size:12px;color:#64748B" id="rackMeta"></span></div>' +
-            '<button class="btn btn-ghost btn-sm" type="button" data-edit-rack>' + UI.icon('edit', 14) + '<span>Изменить стеллаж</span></button>' +
-          '</div>' +
-          '<div class="rack-info" id="rackInfo"></div>' +
-          '<div id="rackPhoto"></div>' +
-          '<div class="goods-grid" id="goods"></div>' +
-          '<section class="card stack-sm" style="margin-top:4px">' +
-            '<div class="row-between">' +
-              '<span class="display" style="font-size:15px;font-weight:600">Продажи за смену</span>' +
-              '<span style="font-size:12px;color:#64748B" id="todayDate"></span>' +
+          '<div class="rack-headline">' +
+            '<div id="rackPhoto"></div>' +
+            '<div style="min-width:0;flex:1">' +
+              '<h2 id="rackTitle" class="rack-h">Мой стеллаж</h2>' +
+              '<span class="mono" style="font-size:12px;color:#64748B" id="rackMeta"></span>' +
+              '<div class="rack-info" id="rackInfo"></div>' +
             '</div>' +
-            '<div id="log"></div>' +
-          '</section>' +
+          '</div>' +
+          '<div class="goods-grid" id="goods"></div>' +
+          '<details class="card log-box" id="logBox">' +
+            '<summary><span class="display" style="font-size:15px;font-weight:600">Продажи за смену</span>' +
+              '<span class="log-meta"><b class="mono" id="logCount"></b><span id="todayDate"></span></span></summary>' +
+            '<div id="log" style="margin-top:8px"></div>' +
+          '</details>' +
         '</div>' +
         '<aside class="stack" id="side"></aside>' +
       '</div>' +
